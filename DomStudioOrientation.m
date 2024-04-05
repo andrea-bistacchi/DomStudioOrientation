@@ -3,7 +3,7 @@ function DomStudioOrientation(~)
 %
 % Function used for the analysis of orientation data imported as CSV files with Dip / Dip Azimuth
 %
-% Last update by Andrea Bistacchi 5/4/2024
+% Last update by Stefano Casiraghi 8/2/2024
 
 
 % initialize
@@ -11,10 +11,14 @@ clear all; close all; clc; clearvars;
 rad = pi/180;
 deg = 180/pi;
 
+% file overwrite warning
+disp(' ')
+disp('WARNING: this script overwrites output files without asking for confirmaton.')
+
 % load CSV file with facets data
 [file, path] = uigetfile('*.csv');
 filename = [path file];
-[path,file,~] = fileparts(filename);
+[path,file,extension] = fileparts(filename);
 inDataTable = readtable(filename);
 
 % copy data to variables
@@ -53,20 +57,20 @@ Lpole = [Lpole;Lpole_neg];
 Mpole = [Mpole;Mpole_neg];
 Npole = [Npole;Npole_neg];
 
-% K-means clustering
+% K-medoid clustering
 disp(' ')
-disp('Number of classes for K-means clustering [1]:')
+disp('Number of classes for K-medoid clustering [1]:')
 nClass = input('>> ');
 if nClass < 1, nClass = 1; end
 nClass = round(nClass)*2;
 idClass = kmedoids([Lpole Mpole Npole],nClass);
 countClass = zeros(1,nClass);
-for i = 1:nClass;
+for i = 1:nClass
     countClass(i) = sum(idClass==i);
 end
 countClassPercent = countClass./Ndata.*100;
 disp(' ')
-disp('K-means clustering done')
+disp('K-medoid clustering done')
 
 % Fisher's mean and K
 for i = 1:nClass
@@ -97,6 +101,7 @@ disp(' ')
 disp('Fisher means and Ks done')
 
 % remove mean vectors pointing upwards
+keep_class = find(meanDip<=90);
 fisherK = fisherK(meanDip<=90);
 confC = confC(meanDip<=90);
 spherAp = spherAp(meanDip<=90);
@@ -159,7 +164,7 @@ end
 disp(' ')
 disp('point density done') %%%
 
-%%%Zmax = 0;
+%Zmax = 0;
 for j = 1:331
     %convert counts to percent
     z(j) = (z(j)/Ndata)*100;
@@ -184,8 +189,8 @@ hh=z;
 %Grid the data linearly:
 estep = abs((min(e)-max(e))/nx);
 nstep = abs((min(n)-max(n))/ny);
-ee = [min(e):estep:max(e)];
-nn = [min(n):nstep:max(n)];
+ee = min(e):estep:max(e);
+nn = min(n):nstep:max(n);
 [xi,yi,zi] = griddata(e,n,hh,ee,nn');
 % v = floor(min(hh)):ci:max(hh);
 v = floor(linspace(min(hh),max(hh),ci));
@@ -249,7 +254,7 @@ figure('WindowStyle','docked');
 % in turn inspired by wind_rose.m
 % The code to change the axis labels from a mathematical system to
 % N,S,E,W were written by Jordan Rosenthal in a forum post:
-%      http://www.mathworks.com/matlabcentral/newsreader/author/4601
+% http://www.mathworks.com/matlabcentral/newsreader/author/4601
 D = mod(90 - SymmetricStrike, 360)*pi/180;
 rose(D, 36);   % rose with bins at 10° increment
 hHiddenText = findall(gca,'type','text');
@@ -291,3 +296,20 @@ disp('rose diagram done')
 
 % button = 1; xx = []; yy=[];
 % while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
+
+% save with class
+out_dip = [Dip; Dip];
+out_azi = [DipAzimuth; DipAzimuth];
+out_data = [out_dip out_azi idClass];
+out_data = out_data(find(ismember(out_data(:,3),keep_class)),:);
+csvwrite([filename '_classified.csv'],out_data)
+disp(' ')
+disp('output done')
+
+% Results table
+% Class_number = cell2table(keep_class);
+% Mean_Dip_Dir = num2str(meanDir);
+% Mean_Dip = num2str(meanDip);
+% Fisher_K = num2str(fisherK);
+% Results_table = table(Class_number, Mean_Dip_Dir, Mean_Dip, Fisher_K);
+% writetable(Results_table, [file '_results_table']);
