@@ -1,9 +1,9 @@
 function DomStudioOrientation(~)
 % @ 2015 by Andrea Bistacchi, distributed under the GNU AGPL v3.0 license.
 %
-% Function used for the analysis of lineaments imported as SHP files
+% Function used for the analysis of orientation data imported as CSV files with Dip / Dip Azimuth
 %
-% Last update by Stefano Casiraghi 2023/04/19
+% Last update by Andrea Bistacchi 5/4/2024
 
 
 % initialize
@@ -251,7 +251,7 @@ figure('WindowStyle','docked');
 % N,S,E,W were written by Jordan Rosenthal in a forum post:
 %      http://www.mathworks.com/matlabcentral/newsreader/author/4601
 D = mod(90 - SymmetricStrike, 360)*pi/180;
-rose(D, 36);   % rose with bins at 10° increment
+rose(D, 36);   % rose with bins at 10Â° increment
 hHiddenText = findall(gca,'type','text');
 Angles = 0 : 30 : 330;
 hObjToDelete = zeros( length(Angles)-4, 1 );
