@@ -3,117 +3,103 @@ function DomStudioOrientation(~)
 %
 % Function used for the analysis of orientation data imported as CSV files with Dip / Dip Azimuth
 %
-% Last update by Stefano Casiraghi 8/2/2024
-
+% Last update by Andrea Bistacchi 9/4/2024
 
 % initialize
 clear all; close all; clc; clearvars;
+addpath("kuipertest")
 rad = pi/180;
 deg = 180/pi;
+
+% INPUT AND CHECK DATA
 
 % file overwrite warning
 disp(' ')
 disp('WARNING: this script overwrites output files without asking for confirmaton.')
 
-% load CSV file with facets data
+% load CSV file with orientation data
 [file, path] = uigetfile('*.csv');
 filename = [path file];
-[path,file,extension] = fileparts(filename);
+[~,~,ext] = fileparts(filename);
 inDataTable = readtable(filename);
+filename = erase(filename,ext);
 
-% copy data to variables
-DipAzimuth = inDataTable.DipDir_;
-Dip = inDataTable.Dip;
-
-% read data
-Ndata = size(inDataTable,1);  % Ndata = number of data points
+% file info
 disp(' ')
-disp(['Loaded data number: ' num2str(Ndata)])
+disp(['Column names recorded in file are: ' inDataTable.Properties.VariableNames])
+disp(' ')
+disp('Import data as [1]:')
+disp('   1: Dip Direction / Dip')
+disp('   2: Dip / Dip Direction')
+disp('   3: Trend / Plunge')
+disp('   4: Plunge / Trend')
+disp('else: abort importing')
+inDataFormat = input('>> ');
+if isempty(inDataFormat), inDataFormat = 1; end
 
-% check
+% copy formatted data to variables
+if inDataFormat == 1
+    DipDirection = inDataTable.(1);
+    Dip = inDataTable.(2);
+    Plunge = 90-Dip;
+    Trend = (DipDirection<=180).*(DipDirection+180)+(DipDirection>180).*(DipDirection-180);
+elseif inDataFormat == 2
+    DipDirection = inDataTable.(2);
+    Dip = inDataTable.(1);
+    Plunge = 90-Dip;
+    Trend = (DipDirection<=180).*(DipDirection+180)+(DipDirection>180).*(DipDirection-180);
+elseif inDataFormat == 3
+    Trend = inDataTable.(1);
+    Plunge = inDataTable.(2);
+    Dip = 90-Plunge;
+    DipDirection = (Trend<=180).*(Trend+180)+(Trend>180).*(Trend-180);
+elseif inDataFormat == 4
+    Trend = inDataTable.(2);
+    Plunge = inDataTable.(1);
+    Dip = 90-Plunge;
+    DipDirection = (Trend<=180).*(Trend+180)+(Trend>180).*(Trend-180);
+else
+    error('aborting');
+end
+% Ndata = number of data points
+Ndata = size(inDataTable,1);
+disp(' ')
+disp(['Number of data loaded: ' num2str(Ndata)])
+
+% check data
 if max(Dip)>90, error('DIP ERROR'); end
-if max(DipAzimuth)>360, error('AZIMUTH ERROR'); end
+if max(DipDirection)>360, error('AZIMUTH ERROR'); end
 
-% strike (used by rose diagram only)
-Strike = (DipAzimuth<90).*(DipAzimuth+270) + (DipAzimuth>=90).*(DipAzimuth-90);
-SymmetricStrike = [Strike; (Strike<=180).*(Strike+180)+(Strike>180).*(Strike-180)];
-
-% plunge/trend of poles to planes
-Plunge = 90-Dip;
-Trend = (DipAzimuth<=180).*(DipAzimuth+180)+(DipAzimuth>180).*(DipAzimuth-180);
-
-%direction cosines of data vectors
+%direction cosines of pole vectors in lower hemisphere (-sin)
 Lpole = cos(Plunge*rad).*cos(Trend*rad);
 Mpole = cos(Plunge*rad).*sin(Trend*rad);
-Npole = -sin(Plunge*rad);  %we use lower hemisphere
+Npole = -sin(Plunge*rad);
 
-% symmetric unit vectors -> "reflected unit vectors"
+% symmetric unit vectors in upper hemisphere ("reflected unit vectors")
 Lpole_neg = -Lpole; 
 Mpole_neg = -Mpole;
 Npole_neg = -Npole;
 
-% union of unit vectors -> arrays are twice the length of input data
+% union of unit vectors in both hemispheres -> arrays are twice the length of input data
 Lpole = [Lpole;Lpole_neg];
 Mpole = [Mpole;Mpole_neg];
 Npole = [Npole;Npole_neg];
 
-% K-medoid clustering
-disp(' ')
-disp('Number of classes for K-medoid clustering [1]:')
-nClass = input('>> ');
-if nClass < 1, nClass = 1; end
-nClass = round(nClass)*2;
-idClass = kmedoids([Lpole Mpole Npole],nClass);
-countClass = zeros(1,nClass);
-for i = 1:nClass
-    countClass(i) = sum(idClass==i);
-end
-countClassPercent = countClass./Ndata.*100;
-disp(' ')
-disp('K-medoid clustering done')
+% also original input data are duplicated to keep everything consistent, but
+% without reflecting them on the upper sphere (not necessary)
+DipDirection = [DipDirection; DipDirection];
+Dip = [Dip; Dip];
+Trend = [Trend; Trend];
+Plunge = [Plunge; Plunge];
 
-% Fisher's mean and K
-for i = 1:nClass
-    disp(["______________________" num2str(i)])
-    % collect data for class
-    L = Lpole(idClass==i);
-    M = Mpole(idClass==i);
-    N = Npole(idClass==i);
-    sumL = sum(L);
-    sumM = sum(M);
-    sumN = sum(N);
-    R = sqrt(sumL^2+sumM^2+sumN^2);
-    sumLR = sumL/R;
-    sumMR = sumM/R;
-    sumNR = sumN/R;
-    meanP = asin(-sumNR)*deg;
-    meanT = atan2(sumMR,sumLR)*deg;
-    meanT = meanT+(meanT<0)*360;
-    fisherK(i) = (countClass(i)-1)/(countClass(i)-R);  % this is OK for n_data > 16
-    confC(i) = acos( 1 - (countClass(i)-R)/R * ((1/0.01)^(1/(countClass(i)-1)) - 1) )*deg;
-    spherAp(i) = asin(sqrt(2*(1-1/countClass(i))/fisherK(i)))*deg;
-    meanDip(i) = 90-meanP;
-    meanDir(i) = (meanT<=180).*(meanT+180)+(meanT>180).*(meanT-180);
-    disp([num2str(meanDip(i)) " - " num2str(meanDir(i)) " - " num2str(fisherK(i))])
-    clear L M N aL aM aN
-end
-disp(' ')
-disp('Fisher means and Ks done')
+% END INPUT AND CHECK DATA
 
-% remove mean vectors pointing upwards
-keep_class = find(meanDip<=90);
-fisherK = fisherK(meanDip<=90);
-confC = confC(meanDip<=90);
-spherAp = spherAp(meanDip<=90);
-meanDir = meanDir(meanDip<=90);
-meanDip = meanDip(meanDip<=90); % keep this as the last one
-nClass = nClass/2;
+% CONTOURING
 
-
-% plunge/trend of node vectors for contouring grid by direct calculation
+% plunge/trend of grid node vectors for contouring grid by direct calculation
 n = 1;
-p(n) = 90;
-t(n) = 0;
+pNodes(n) = 90;
+tNodes(n) = 0;
 for i = 1:10
     m = 6*i;
     radius = i/10;
@@ -121,25 +107,25 @@ for i = 1:10
     for j = 1:m
         phi = j*DeltaPhi;
         n = n+1;
-        t(n) = phi;
-        theta = 2 * asin(radius/sqrt(2));
-        p(n) = 90 - (theta*deg);
+        tNodes(n) = phi;
+        theta = 2 * asin(radius/sqrt(2))*deg;
+        pNodes(n) = 90 - theta;
     end
 end
 
-% direction cosines (l,m,n) of node vectors for contouring grid
+% direction cosines (l,m,n) of grid node vectors for contouring grid
 for i = 1:331
-    Ln(i) = cos(p(i)*rad) * cos(t(i)*rad);
-    Mn(i) = cos(p(i)*rad) * sin(t(i)*rad);
-    Nn(i) = -sin(p(i)*rad);
+    Lnodes(i) = cos(pNodes(i)*rad) * cos(tNodes(i)*rad);
+    Mnodes(i) = cos(pNodes(i)*rad) * sin(tNodes(i)*rad);
+    Nnodes(i) = -sin(pNodes(i)*rad);
 end
 
 % (x,y) coordinates of nodes for contouring grid from plunge/trend
 for n = 1:331
-    theta = (90-p(n))*rad;
+    theta = (90-pNodes(n))*rad;
     d = sqrt(2) * sin(theta/2);
-    x(n) = d .* sin(t(n)*rad);
-    y(n) = d .* cos(t(n)*rad);
+    xNodes(n) = d .* sin(tNodes(n)*rad);
+    yNodes(n) = d .* cos(tNodes(n)*rad);
 end
 disp(' ')
 disp('grid nodes done')
@@ -151,41 +137,35 @@ cone = 8.1096144559941786958201832872484; %%% http://en.wikipedia.org/wiki/Solid
 
 %count point density at all 331 nodes
 for i = 1:331
-    z(i) = 0;
+    zNodes(i) = 0;
     %dot product of node vectors and data vectors
     for j = 1:Ndata
-        % theta = (acos(Ln(i)*Ld(j) + Mn(i)*Md(j) + Nn(i)*Ld(j)))*deg;
-        theta = (acos(Ln(i)*Lpole(j) + Mn(i)*Mpole(j) + Nn(i)*Npole(j)))*deg;
+        theta = (acos(Lnodes(i)*Lpole(j) + Mnodes(i)*Mpole(j) + Nnodes(i)*Npole(j)))*deg;
         if theta <= cone
-            z(i) = z(i)+1;
+            zNodes(i) = zNodes(i)+1;
         end
     end
 end
 disp(' ')
-disp('point density done') %%%
+disp('point density done')
 
-%Zmax = 0;
-for j = 1:331
-    %convert counts to percent
-    z(j) = (z(j)/Ndata)*100;
-    % if z(j) > Zmax
-    %     Zmax = z(j);
-    % end
-end
+%convert counts to percent
+zNodes = zNodes/Ndata*100;
 disp(' ')
 disp('density percent done')
 
-% contouring Kalsbeek
+% Kalsbeek contouring - CHECK THIS IF WE HAVE TIME
 % set parameters:
 % number of x and y nodes for grid
 % make these smaller if you get an error about excceding the max array size
-nx = 50;
+% nx = 50;
+nx = 90;
 ny = nx;
 % number of contours:
 ci = 5;
-e=x;
-n=y;
-hh=z;
+e=xNodes;
+n=yNodes;
+hh=zNodes;
 %Grid the data linearly:
 estep = abs((min(e)-max(e))/nx);
 nstep = abs((min(n)-max(n))/ny);
@@ -195,44 +175,302 @@ nn = min(n):nstep:max(n);
 % v = floor(min(hh)):ci:max(hh);
 v = floor(linspace(min(hh),max(hh),ci));
 disp(' ')
-disp('gridding done') %%%
+disp('gridding done')
+
+% END CONTOURING
+
+% K-MEDOID CLUSTERING
+
+% ginput can be used to add seeds for k-medoid or k-meand with mouse - not
+% implemented at the moment
+% button = 1; xx = []; yy=[];
+% while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
+
+% number of classes with automatic seed initialization
+disp(' ')
+disp('Number of classes for K-medoid clustering [1]:')
+nClass = input('>> ');
+if isempty(nClass), nClass = 1; end
+if nClass < 1, nClass = 1; end
+nClass = round(nClass)*2;
+
+% clustering with k-medoids
+idClass = kmedoids([Lpole Mpole Npole],nClass);
+countClass = zeros(1,nClass);
+for i = 1:nClass
+    countClass(i) = sum(idClass==i);
+end
+countClassPercent = countClass./Ndata.*100;
+disp(' ')
+disp('K-medoid clustering done')
+
+% END K-MEDOID CLUSTERING
+
+% FISHER STATISTICS
+
+% Fisher's mean and K
+for i = 1:nClass
+    disp(['Class: ' num2str(i)])
+    % collect data for class
+    L = Lpole(idClass==i);
+    M = Mpole(idClass==i);
+    N = Npole(idClass==i);
+    % calculate stats
+    sumL = sum(L);
+    sumM = sum(M);
+    sumN = sum(N);
+    R = sqrt(sumL^2+sumM^2+sumN^2);
+    sumLR(i) = sumL/R;
+    sumMR(i) = sumM/R;
+    sumNR(i) = sumN/R;
+    meanP = asin(-sumNR(i))*deg;
+    meanT = atan2(sumMR(i),sumLR(i))*deg;
+    meanT = meanT+(meanT<0)*360;
+    if length(L) >= 16
+        fisherK(i) = (countClass(i)-1)/(countClass(i)-R);  % this is OK for n_data >= 16
+    else
+        fisherK(i) = countClass(i)/(countClass(i)-R)*(1 - 1/countClass(i))^2;  % this is OK for n_data < 16
+        disp('----WARNING: n data < 16----')
+    end
+    confC(i) = acos( 1 - (countClass(i)-R)/R * ((1/0.01)^(1/(countClass(i)-1)) - 1) )*deg;
+    spherAp(i) = asin(sqrt(2*(1-1/countClass(i))/fisherK(i)))*deg;
+    meanDip(i) = 90-meanP;
+    meanDir(i) = (meanT<=180).*(meanT+180)+(meanT>180).*(meanT-180);
+    meanPlunge(i) = meanP;
+    meanTrend(i) = meanT;
+    disp(['Dip: ' num2str(meanDip(i)) '   Dir: ' num2str(meanDir(i)) '   K: ' num2str(fisherK(i))])
+    clear L M N sumL sumM sumN R meanP meanT
+end
+
+% remove classes with mean vectors pointing upwards (but reflected poles
+% are kept since they are used later on)
+keep_class = find(meanDip<=90);
+countClass = countClass(meanDip<=90);
+countClassPercent = countClassPercent(meanDip<=90);
+fisherK = fisherK(meanDip<=90);
+confC = confC(meanDip<=90);
+spherAp = spherAp(meanDip<=90);
+meanPlunge = meanPlunge(meanDip<=90);
+meanTrend = meanTrend(meanDip<=90);
+meanDir = meanDir(meanDip<=90);
+meanDip = meanDip(meanDip<=90); % this must be the last one
+nClass = nClass/2;
+
+disp(' ')
+disp('Fisher means and Ks done')
+
+% GOF for Fisher's statistics according to:
+% Fisher, N. I., Lewis, T., and Embleton, B. J. J.
+% 1987
+% Statistical analysis of spherical data
+% Cambridge University Press
+% and references therein by the same authors
+for i = 1:nClass
+    class = keep_class(i);
+    disp(['class: ' num2str(class)])
+    disp(['Mean Plunge(i): ' num2str(meanPlunge(i))])
+    disp(['Mean Trend:     ' num2str(meanTrend(i))])
+    disp(['Fisher K:       ' num2str(fisherK(i))])
+
+    % collect data for this class
+    L = Lpole(idClass==class);
+    M = Mpole(idClass==class);
+    N = Npole(idClass==class);
+    cartCords = [L';
+                 M';
+                 N'];
+
+    % define alpha, beta in rad
+    alpha = meanPlunge(i)*rad;
+    beta =  meanTrend(i)*rad;
+
+    % rotate original data to mean pole (alpha, beta) with rotation
+    % matrix A_prime, obtained from rotation vector axis_prime and
+    % rotation angle angle_prime
+    axis_prime = cross([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]);
+    angle_prime = acos(dot([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]));
+    axis_prime = axis_prime / sin(angle_prime);
+    A_prime = axang2rotm([axis_prime angle_prime]);
+    cartCords_prime = A_prime * cartCords;
+
+    % calculate rotated polar coords in rad
+    theta_prime = acos(cartCords_prime(3,:)); % non-geological spherical coords use acos (geological use -asin)
+    phi_prime = atan2(cartCords_prime(2,:), cartCords_prime(1,:));  % y then x
+
+    % show rotated poles in polar plot
+    figure('WindowStyle','docked');
+    subplot(1,5,1)
+    plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
+    hold on
+    plot(sqrt(2) * sin(-theta_prime/2).* sin(phi_prime), ...
+         sqrt(2) * sin(-theta_prime/2).* cos(phi_prime), ...
+         'o');
+    axis equal
+    axis tight
+    set(gca,'XTick',[], 'YTick', [])
+
+    % X_a = 1 - cos(theta_prime) should be exponentially distributed
+    % E(1/FisherK) if FisherK >3. Test with KS.
+    % ----------
+    % Note that Fisher & Best, 1994, write E(FisherK), buth ther should be
+    % an error,or a different diefinition of FisherK, since there is no way
+    % to fit E(FisherK).
+    % ----------
+    X_a = 1 - cos(theta_prime);
+    % empirical cumulative distribution
+    [~,X_a_ecdf] = ecdf(X_a);
+    % create exponential distribution E(1/FisherK)
+    expDist = makedist('Exponential','mu',1/fisherK(i));
+    expPDF = pdf(expDist,X_a_ecdf);
+    % Kolmogorov-Smirnov test
+    [ExpLHo,ExpLPval,~,~] = kstest(X_a,'CDF',expDist);
+    disp(' ')
+    disp('Kolmogorov-Smirnov GOF test for 1 - cos(theta_prime):')
+    if ExpLHo == 0
+        disp(['-> exponential dist. E(1/FisherK) ACCEPTED at 5% sign. with P-value = ' num2str(ExpLPval)]);
+    else
+        disp(['-> exponential dist. E(1/FisherK) REJECTED at 5% sign. with P-value = ' num2str(ExpLPval)]);
+    end
+    % plotting
+    subplot(1,5,2)
+    histogram(X_a,'Normalization','pdf','FaceColor',[.6 .6 .6]);
+    hold on
+    plot(X_a_ecdf,expPDF,'r','linewidth',2)
+    grid on
+    
+    % X_b = phi_prime should be uniformly distributed U(0, 2pi)
+    % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
+    % Test with Kuiper.
+    X_b = phi_prime;
+    X_b = X_b + 2*pi*(X_b<0);
+    % empirical cumulative distribution 
+    [~,X_b_ecdf] = ecdf(X_b);
+    % create uniform distribution U(0, 2pi)
+    uniDist = makedist('Uniform','lower',0,'upper',2*pi);
+    uniPDF = pdf(uniDist,X_b_ecdf);
+    % Kuiper test 
+    [UniLHo,UniLPval,~,~] = kuipertest(X_b,'CDF',uniDist);
+    disp(' ')
+    disp('Kuiper GOF test for phi_prime / 2pi:')
+    if UniLHo == 0
+        disp(['-> uniform dist. U(0, 2pi) ACCEPTED at 5% sign. with P-value = ' num2str(UniLPval)]);
+    else
+        disp(['-> uniform dist. U(0, 2pi) REJECTED at 5% sign. with P-value = ' num2str(UniLPval)]);
+    end
+    % plotting
+    subplot(1,5,3)
+    histogram(X_b,'Normalization','pdf','FaceColor',[.6 .6 .6]);
+    hold on
+    plot(X_b_ecdf,uniPDF,'r','linewidth',2)
+    grid on
+
+    % rotate original data to mean pole (3pi/2 - alpha, beta - pi) with rotation
+    % matrix A_second, obtained from rotation vector axis_second and
+    % rotation angle angle_second
+    axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
+                        [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]);
+    angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
+                        [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]));
+    axis_second = axis_second / sin(angle_second);
+    A_second = axang2rotm([axis_second angle_second]);
+    cartCords_second = A_second * cartCords;
+
+    % calculate rotated polar coords in rad
+    theta_second = acos(cartCords_second(3,:)); % non-geological spherical coords use acos (geological use -asin)
+    phi_second = atan2(cartCords_second(2,:), cartCords_second(1,:));  % y then x
+    phi_second = phi_second -2*pi*(phi_second>pi);
+
+    % show rotated poles in polar plot
+    subplot(1,5,4)
+    plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
+    hold on
+    plot(sqrt(2) * sin(theta_second/2).* sin(phi_second), ...
+         sqrt(2) * sin(theta_second/2).* cos(phi_second), ...
+         'o');
+    axis equal
+    axis tight
+    set(gca,'XTick',[], 'YTick', [])
+
+    % X_c = phi_second * sqrt(sin(theta_second)) should be normally
+    % distributed N(0, 1/FisherK). Test with KS.
+    % ----------
+    % Note that Fisher & Best, 1994, write N(0, 1/FisherK), buth ther should be an error,
+    % or a different diefinition of FisherK, sice there is no way to accept this very
+    % narrow distribution.
+    % ----------
+    X_c = phi_second.*sqrt(sin(theta_second));
+    % empirical cumulative distribution
+    [~,X_c_ecdf] = ecdf(X_c);
+    % create uniform distribution U(0, 2pi)
+    normDist = makedist('Normal','mu',0,'sigma',1/fisherK(i));
+    normPDF = pdf(normDist,X_c_ecdf);
+    % Kolmogorov-Smirnov test
+    [normLHo,normLPval,~,~] = kstest(X_c,'CDF',normDist);
+    disp(' ')
+    disp('Kolmogorov-Smirnov GOF test for phi_second * sqrt(sin(theta_second)):')
+    if normLHo == 0
+        disp(['-> normal dist. N(0, 1/FisherK) ACCEPTED at 5% sign. with P-value = ' num2str(normLPval)]);
+    else
+        disp(['-> normal dist. N(0, 1/FisherK) REJECTED at 5% sign. with P-value = ' num2str(normLPval)]);
+    end
+    % plotting
+    subplot(1,5,5)
+    histogram(X_c,'Normalization','pdf','FaceColor',[.6 .6 .6]);
+    hold on
+    plot(X_c_ecdf,normPDF,'r','linewidth',2)
+    grid on
+
+    % save as jpeg
+    print('-djpeg',[filename '_Fisher_test_class_' num2str(class) '.jpg'])
+end
+
+disp(' ')
+disp('Fisher GOF tests done')
+
+% END FISHER STATISTICS
 
 % STEREOPLOT
 figure('WindowStyle','docked');
 cmap =[ones(1,10)' linspace(1,0,10)' linspace(1,0,10)'];
 
-%draw primitive circle
-radius = 1;
-theta = linspace(0,2*pi,180);
-x = radius * cos(theta);
-y = radius * sin(theta);
-plot(x,y,'k-')
+%draw primitive circle with standard radius = 1
+xNodes = cos(linspace(0,2*pi,180));
+yNodes = sin(linspace(0,2*pi,180));
+plot(xNodes,yNodes,'k-')
 hold on
 axis equal
 axis off
 imagesc(ee',nn',zi)
 colormap(cmap)
-plot(x,y,'k-')
+plot(xNodes,yNodes,'k-')
 plot(0,0,'k+')
-plot(radius,0,'k+')
-plot(0,radius,'k+')
-plot(-radius,0,'k+')
-plot(0,-radius,'k+')
+plot(1,0,'k+')
+plot(0,1,'k+')
+plot(-1,0,'k+')
+plot(0,-1,'k+')
 plot(0,0,'k+')
 
 %plot and label contours
 [c,h] = contour(xi,yi,zi,v,'-k');
-clabel(c,h);
+%clabel(c,h);
 
-% plot cluster means
+% plot cluster poles and means
 for i = 1:nClass
-    theta = (meanDip(i))*rad;
+    class = keep_class(i);
+    theta = (Dip(idClass==class))*rad;
     d = sqrt(2) * sin(theta/2);
+    xNodes = d.* -sin((DipDirection(idClass==class))*rad);
+    yNodes = d.* -cos((DipDirection(idClass==class))*rad);
+    plot(xNodes,yNodes,'ko','MarkerSize',3,'linewidth',1);
+    meanTheta = (meanDip(i))*rad;
+    d = sqrt(2) * sin(meanTheta/2);
     xMean = d.* -sin((meanDir(i))*rad);
     yMean = d.* -cos((meanDir(i))*rad);
-    plot(xMean,yMean,'kd','MarkerSize',6,'linewidth',2,'MarkerFaceColor','w');
+    plot(xMean,yMean,'kd','MarkerSize',6,'linewidth',2,'MarkerFaceColor','w');    
 end
-t = title({['Poles in class = ' num2str(countClass)];...
+tNodes = title({ ...
+    ['Class ID = ' num2str(keep_class)];...
+    ['Poles in class = ' num2str(countClass)];...
     ['percent = ' num2str(countClassPercent)];...
     ['Mean Dip = ' num2str(meanDip)];...
     ['Mean Dir = ' num2str(meanDir)];...
@@ -240,15 +478,24 @@ t = title({['Poles in class = ' num2str(countClass)];...
     ['99% confidence cone apical angle = ' num2str(confC)];...
     ['68.26% variability spherical aperture = ' num2str(spherAp)];...
     'Concentrations % of total per 1% area';...
-    ['Maximum concentration = ' num2str(max(z))]});
-set(t, 'horizontalAlignment', 'l')
+    ['Maximum concentration = ' num2str(max(zNodes))] ...
+    });
+set(tNodes, 'horizontalAlignment', 'l')
 
 % save as jpeg
 print('-djpeg',[filename '_contour_Km.jpg'])
 disp(' ')
 disp('stereoplot done')
 
+% END STEREOPLOT
+
 % ROSE DIAGRAM
+
+% strike (used by rose diagram only)
+Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
+SymmetricStrike = [Strike; (Strike<=180).*(Strike+180)+(Strike>180).*(Strike-180)];
+
+% plot rose diagram
 figure('WindowStyle','docked');
 % geologic rose plot inpired by earth_rose.m by Cameron Sparr
 % in turn inspired by wind_rose.m
@@ -278,7 +525,8 @@ for ang = Angles
     end
 end
 delete(hObjToDelete(hObjToDelete~=0));
-t = title({['Poles in class = ' num2str(countClass)];...
+tNodes = title({ ...
+    ['Poles in class = ' num2str(countClass)];...
     ['percent = ' num2str(countClassPercent)];...
     ['Mean Dip = ' num2str(meanDip)];...
     ['Mean Dir = ' num2str(meanDir)];...
@@ -286,25 +534,31 @@ t = title({['Poles in class = ' num2str(countClass)];...
     ['99% confidence cone apical angle = ' num2str(confC)];...
     ['68.26% variability spherical aperture = ' num2str(spherAp)];...
     'Concentrations % of total per 1% area';...
-    ['Maximum concentration = ' num2str(max(z))]});
-set(t, 'horizontalAlignment', 'left')
+    ['Maximum concentration = ' num2str(max(zNodes))] ...
+    });
+set(tNodes, 'horizontalAlignment', 'left')
 
 % save as jpeg
 print('-djpeg',[filename '_rose_Km.jpg'])
 disp(' ')
 disp('rose diagram done')
 
-% button = 1; xx = []; yy=[];
-% while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
+% END ROSE DIAGRAM
+
+% SAVE
 
 % save with class
-out_dip = [Dip; Dip];
-out_azi = [DipAzimuth; DipAzimuth];
-out_data = [out_dip out_azi idClass];
+if inDataFormat == 1
+    out_data = [DipDirection Dip idClass];
+elseif inDataFormat == 2
+    out_data = [Dip DipDirection idClass];
+elseif inDataFormat == 3
+    out_data = [Trend Plunge idClass];
+elseif inDataFormat == 4
+    out_data = [Plunge Trend idClass];
+end
 out_data = out_data(find(ismember(out_data(:,3),keep_class)),:);
-csvwrite([filename '_classified.csv'],out_data)
-disp(' ')
-disp('output done')
+csvwrite([filename '_classified.csv'],out_data)  % add header with column names?
 
 % Results table
 % Class_number = cell2table(keep_class);
@@ -313,3 +567,9 @@ disp('output done')
 % Fisher_K = num2str(fisherK);
 % Results_table = table(Class_number, Mean_Dip_Dir, Mean_Dip, Fisher_K);
 % writetable(Results_table, [file '_results_table']);
+
+disp(' ')
+disp('output done')
+
+% END SAVE
+
