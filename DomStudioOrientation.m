@@ -312,9 +312,10 @@ for i = 1:nClass
     % X_a = 1 - cos(theta_prime) should be exponentially distributed
     % E(1/FisherK) if FisherK >3. Test with KS.
     % ----------
-    % Note that Fisher & Best, 1994, write E(FisherK), buth ther should be
-    % an error,or a different diefinition of FisherK, since there is no way
-    % to fit E(FisherK).
+    % Note that Fisher & Best, 1987, write E(FisherK), buth this should be
+    % an error, or a different diefinition of FisherK, since there is no way
+    % to fit E(FisherK). 1/FisherK seems OK because for larger FisherK the
+    % std dev should be smaller.
     % ----------
     X_a = 1 - cos(theta_prime);
     % empirical cumulative distribution
@@ -340,7 +341,8 @@ for i = 1:nClass
     
     % X_b = phi_prime should be uniformly distributed U(0, 2pi)
     % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
-    % Test with Kuiper.
+    % Test with Kuiper thanks to:
+    % https://it.mathworks.com/matlabcentral/fileexchange/50158-kuiper-test
     X_b = phi_prime;
     X_b = X_b + 2*pi*(X_b<0);
     % empirical cumulative distribution 
@@ -394,9 +396,10 @@ for i = 1:nClass
     % X_c = phi_second * sqrt(sin(theta_second)) should be normally
     % distributed N(0, 1/FisherK). Test with KS.
     % ----------
-    % Note that Fisher & Best, 1994, write N(0, 1/FisherK), buth ther should be an error,
-    % or a different diefinition of FisherK, sice there is no way to accept this very
-    % narrow distribution.
+    % Note that Fisher & Best, 1994, write N(0, 1/FisherK), buth this should
+    % be an error, either in X_c or in the rotation, or a different
+    % definition of FisherK, sice there is no way to accept this very
+    % narrow distribution. Must be investigated.
     % ----------
     X_c = phi_second.*sqrt(sin(theta_second));
     % empirical cumulative distribution
