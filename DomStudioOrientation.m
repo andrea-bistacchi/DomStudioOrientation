@@ -227,7 +227,10 @@ for i = 1:nClass
     meanT = atan2(sumMR(i),sumLR(i))*deg;
     meanT = meanT+(meanT<0)*360;
     if length(L) >= 16
-        fisherK(i) = (countClass(i)-1)/(countClass(i)-R);  % this is OK for n_data >= 16
+        % disp('fisherK(i)')
+        fisherK(i) = (countClass(i)-1)/(countClass(i)-R)  % this is OK for n_data >= 16 standard in geology textbooks
+        % fisherK(i) = R/length(L)*(3-(R/length(L))^2)/(1-(R/length(L))^2) % Banerjee 2005
+        % fisherK(i) = 1/(1-R/length(L)) % Mardia & Jupp 2000, p. 214
     else
         fisherK(i) = countClass(i)/(countClass(i)-R)*(1 - 1/countClass(i))^2;  % this is OK for n_data < 16
         disp('----WARNING: n data < 16----')
