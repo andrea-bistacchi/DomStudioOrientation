@@ -293,6 +293,8 @@ for i = 1:nClass
     axis_prime = cross([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]);
     angle_prime = acos(dot([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]));
     axis_prime = axis_prime / sin(angle_prime);
+    disp('axis_prime'); disp(atan2(axis_prime(2), axis_prime(1))*deg);
+    disp('angle_prime'); disp(angle_prime*deg);
     A_prime = axang2rotm([axis_prime angle_prime]);
     cartCords_prime = A_prime * cartCords;
 
@@ -377,6 +379,8 @@ for i = 1:nClass
     angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
                         [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]));
     axis_second = axis_second / sin(angle_second);
+    disp('axis_second'); disp(atan2(axis_second(2), axis_second(1))*deg);
+    disp('angle_second'); disp(angle_second*deg);
     A_second = axang2rotm([axis_second angle_second]);
     cartCords_second = A_second * cartCords;
 
