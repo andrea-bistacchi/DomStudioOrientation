@@ -414,7 +414,8 @@ for i = 1:nClass
     % empirical cumulative distribution
     [~,X_c_ecdf] = ecdf(X_c);
     % create uniform distribution U(0, 2pi)
-    normDist = makedist('Normal','mu',0,'sigma',1/fisherK(i));
+    % normDist = makedist('Normal','mu',0,'sigma',1/fisherK(i));
+    normDist = makedist('Normal','mu',0,'sigma',var(X_c));
     normPDF = pdf(normDist,X_c_ecdf);
     % Kolmogorov-Smirnov test
     [normLHo,normLPval,~,~] = kstest(X_c,'CDF',normDist);
