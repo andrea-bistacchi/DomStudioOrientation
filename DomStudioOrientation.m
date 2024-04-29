@@ -312,6 +312,19 @@ for i = 1:nClass
     axis equal
     axis tight
     set(gca,'XTick',[], 'YTick', [])
+    title({'Original data rotated to';...
+           'mean pole (\alpha, \beta)'})
+    %draw grid for primitive circle with standard radius = 1
+    for d = sqrt(2) * sin((10:10:80)*rad/2)
+        xNodes = d * cos(linspace(0,2*pi,180));
+        yNodes = d * sin(linspace(0,2*pi,180));
+        plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+    end
+    for d = (10:10:180)*rad
+        xNodes = [cos(d) -cos(d)];
+        yNodes = [sin(d) -sin(d)];
+        plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+    end
 
     % X_a = 1 - cos(theta_prime) should be exponentially distributed
     % E(1/FisherK) if FisherK >3. Test with KS.
@@ -332,9 +345,13 @@ for i = 1:nClass
     disp(' ')
     disp('Kolmogorov-Smirnov GOF test for 1 - cos(theta_prime):')
     if ExpLHo == 0
-        disp(['-> exponential dist. E(1/FisherK) ACCEPTED at 5% sign. with P-value = ' num2str(ExpLPval)]);
+        outcome = {'Exponential dist. E(1/K)';...
+                   'ACCEPTED at 5% sign.';...
+                  ['with P-value = ' num2str(ExpLPval)]};
     else
-        disp(['-> exponential dist. E(1/FisherK) REJECTED at 5% sign. with P-value = ' num2str(ExpLPval)]);
+        outcome = {'Exponential dist. E(1/FisherK)';...
+                   'REJECTED at 5% sign.';...
+                  ['with P-value = ' num2str(ExpLPval)]};
     end
     % plotting
     subplot(1,5,2)
@@ -342,6 +359,10 @@ for i = 1:nClass
     hold on
     plot(X_a_ecdf,expPDF,'r','linewidth',2)
     grid on
+    set(gca, 'PlotBoxAspectRatio', [1,2,1])
+    disp(strcat('-> ', outcome));
+    tNodes = title(outcome);
+    % set(tNodes, 'horizontalAlignment', 'l')
     
     % X_b = phi_prime should be uniformly distributed U(0, 2pi)
     % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
@@ -359,16 +380,26 @@ for i = 1:nClass
     disp(' ')
     disp('Kuiper GOF test for phi_prime / 2pi:')
     if UniLHo == 0
-        disp(['-> uniform dist. U(0, 2pi) ACCEPTED at 5% sign. with P-value = ' num2str(UniLPval)]);
+        outcome = {'Uniform dist. U(0, 2\pi)';...
+                   'ACCEPTED at 5% sign.';...
+                  ['with P-value = ' num2str(UniLPval)]};
     else
-        disp(['-> uniform dist. U(0, 2pi) REJECTED at 5% sign. with P-value = ' num2str(UniLPval)]);
+        outcome = {'Uniform dist. U(0, 2\pi)';...
+                   'REJECTED at 5% sign.';...
+                  ['with P-value = ' num2str(UniLPval)]};
     end
     % plotting
     subplot(1,5,3)
-    histogram(X_b,'Normalization','pdf','FaceColor',[.6 .6 .6]);
+    histogram(X_b,'Normalization','pdf','FaceColor',[.6 .6 .6],'BinLimits',[0 2*pi]);
     hold on
     plot(X_b_ecdf,uniPDF,'r','linewidth',2)
+    xticks([0 .5*pi pi 1.5*pi 2*pi])
+    xticklabels({'0', '\pi/2', '\pi', '3/2\pi', '2\pi'})
     grid on
+    set(gca, 'PlotBoxAspectRatio', [1,2,1])
+    disp(strcat('-> ', outcome));
+    tNodes = title(outcome);
+    % set(tNodes, 'horizontalAlignment', 'l')
 
     % rotate original data to mean pole (3pi/2 - alpha, beta - pi) with rotation
     % matrix A_second, obtained from rotation vector axis_second and
@@ -396,11 +427,24 @@ for i = 1:nClass
     plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
     hold on
     plot(sqrt(2) * sin(theta_second/2).* sin(phi_second), ...
-         sqrt(2) * sin(theta_second/2).* cos(phi_second), ...
-         'o');
+        sqrt(2) * sin(theta_second/2).* cos(phi_second), ...
+        'o');
     axis equal
     axis tight
     set(gca,'XTick',[], 'YTick', [])
+    title({'Original data rotated to';...
+           'mean pole (3/2\pi - \alpha, \beta - \pi)'})
+    %draw grid for primitive circle with standard radius = 1
+    for d = sqrt(2) * sin((10:10:80)*rad/2)
+        xNodes = d * cos(linspace(0,2*pi,180));
+        yNodes = d * sin(linspace(0,2*pi,180));
+        plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+    end
+    for d = (10:10:180)*rad
+        xNodes = [cos(d) -cos(d)];
+        yNodes = [sin(d) -sin(d)];
+        plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+    end
 
     % X_c = phi_second * sqrt(sin(theta_second)) should be normally
     % distributed N(0, 1/FisherK). Test with KS.
@@ -422,9 +466,13 @@ for i = 1:nClass
     disp(' ')
     disp('Kolmogorov-Smirnov GOF test for phi_second * sqrt(sin(theta_second)):')
     if normLHo == 0
-        disp(['-> normal dist. N(0, 1/FisherK) ACCEPTED at 5% sign. with P-value = ' num2str(normLPval)]);
+        outcome = {'Normal dist. N(0, 1/K)';...
+                   'ACCEPTED at 5% sign.';...
+                   ['with P-value = ' num2str(normLPval)]};
     else
-        disp(['-> normal dist. N(0, 1/FisherK) REJECTED at 5% sign. with P-value = ' num2str(normLPval)]);
+        outcome = {'Normal dist. N(0, 1/K)';...
+                   'REJECTED at 5% sign.';...
+                   ['with P-value = ' num2str(normLPval)]};
     end
     % plotting
     subplot(1,5,5)
@@ -432,7 +480,11 @@ for i = 1:nClass
     hold on
     plot(X_c_ecdf,normPDF,'r','linewidth',2)
     grid on
-
+    set(gca, 'PlotBoxAspectRatio', [1,2,1])
+    disp(strcat('-> ', outcome));
+    tNodes = title(outcome);
+    % set(tNodes, 'horizontalAlignment', 'l')
+    
     % save as jpeg
     print('-djpeg',[filename '_Fisher_test_class_' num2str(class) '.jpg'])
 end
@@ -483,17 +535,27 @@ for i = 1:nClass
 end
 tNodes = title({ ...
     ['Class ID = ' num2str(keep_class)];...
-    ['Poles in class = ' num2str(countClass)];...
-    ['percent = ' num2str(countClassPercent)];...
-    ['Mean Dip = ' num2str(meanDip)];...
-    ['Mean Dir = ' num2str(meanDir)];...
-    ['Fisher K = ' num2str(fisherK)];...
+    ['Poles in class = ' num2str(countClass) '  -  ' num2str(countClassPercent) '% of total'];...
+    ['Mean Dip / Dir = ' num2str(meanDip) ' / ' num2str(meanDir)];...
+    ['K = ' num2str(fisherK)];...
     ['99% confidence cone apical angle = ' num2str(confC)];...
     ['68.26% variability spherical aperture = ' num2str(spherAp)];...
     'Concentrations % of total per 1% area';...
     ['Maximum concentration = ' num2str(max(zNodes))] ...
     });
-set(tNodes, 'horizontalAlignment', 'l')
+% set(tNodes, 'horizontalAlignment', 'l')
+%draw grid for primitive circle with standard radius = 1
+for d = sqrt(2) * sin((10:10:80)*rad/2)
+    xNodes = d * cos(linspace(0,2*pi,180));
+    yNodes = d * sin(linspace(0,2*pi,180));
+    plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+end
+for d = (10:10:180)*rad
+    xNodes = [cos(d) -cos(d)];
+    yNodes = [sin(d) -sin(d)];
+    plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+end
+
 
 % save as jpeg
 print('-djpeg',[filename '_contour_Km.jpg'])
@@ -539,17 +601,16 @@ for ang = Angles
 end
 delete(hObjToDelete(hObjToDelete~=0));
 tNodes = title({ ...
-    ['Poles in class = ' num2str(countClass)];...
-    ['percent = ' num2str(countClassPercent)];...
-    ['Mean Dip = ' num2str(meanDip)];...
-    ['Mean Dir = ' num2str(meanDir)];...
-    ['Fisher K = ' num2str(fisherK)];...
+    ['Class ID = ' num2str(keep_class)];...
+    ['Poles in class = ' num2str(countClass), '  -  ' num2str(countClassPercent) '% of total'];...
+    ['Mean Dip / Dir = ' num2str(meanDip) ' / ' num2str(meanDir)];...
+    ['K = ' num2str(fisherK)];...
     ['99% confidence cone apical angle = ' num2str(confC)];...
     ['68.26% variability spherical aperture = ' num2str(spherAp)];...
     'Concentrations % of total per 1% area';...
     ['Maximum concentration = ' num2str(max(zNodes))] ...
     });
-set(tNodes, 'horizontalAlignment', 'left')
+% set(tNodes, 'horizontalAlignment', 'left')
 
 % save as jpeg
 print('-djpeg',[filename '_rose_Km.jpg'])
