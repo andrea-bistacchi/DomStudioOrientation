@@ -404,14 +404,14 @@ for i = 1:nClass
     % rotate original data to mean pole (3pi/2 - alpha, beta - pi) with rotation
     % matrix A_second, obtained from rotation vector axis_second and
     % rotation angle angle_second
-    axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
-                        [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]);
-    angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
-                        [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]));
     % axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
-    %                     [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
+    %                     [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]);
     % angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
-    %                     [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]));
+    %                     [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]));
+    axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
+                        [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
+    angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
+                        [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]));
     axis_second = axis_second / sin(angle_second);
     disp(' '); disp('axis_second'); disp(atan2(axis_second(2), axis_second(1))*deg); disp('angle_second'); disp(angle_second*deg);
     A_second = axang2rotm([axis_second angle_second]);
@@ -459,6 +459,7 @@ for i = 1:nClass
     [~,X_c_ecdf] = ecdf(X_c);
     % create uniform distribution U(0, 2pi)
     % normDist = makedist('Normal','mu',0,'sigma',1/fisherK(i));
+    % normDist = makedist('Normal','mu',mean(X_c),'sigma',var(X_c));
     normDist = makedist('Normal','mu',0,'sigma',var(X_c));
     normPDF = pdf(normDist,X_c_ecdf);
     % Kolmogorov-Smirnov test
