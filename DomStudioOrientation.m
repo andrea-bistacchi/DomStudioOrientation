@@ -3,7 +3,7 @@ function DomStudioOrientation(~)
 %
 % Function used for the analysis of orientation data imported as CSV files with Dip / Dip Azimuth
 %
-% Last update by Andrea Bistacchi 9/4/2024
+% Last update by Andrea Bistacchi, Stefano Casiraghi and Gabriele Benedetti 30/4/2024
 
 % initialize
 clear all; close all; clc; clearvars;
@@ -70,7 +70,7 @@ disp(['Number of data loaded: ' num2str(Ndata)])
 if max(Dip)>90, error('DIP ERROR'); end
 if max(DipDirection)>360, error('AZIMUTH ERROR'); end
 
-%direction cosines of pole vectors in lower hemisphere (-sin)
+% direction cosines of pole vectors in lower hemisphere (-sin)
 Lpole = cos(Plunge*rad).*cos(Trend*rad);
 Mpole = cos(Plunge*rad).*sin(Trend*rad);
 Npole = -sin(Plunge*rad);
@@ -154,7 +154,8 @@ zNodes = zNodes/Ndata*100;
 disp(' ')
 disp('density percent done')
 
-% Kalsbeek contouring - CHECK THIS IF WE HAVE TIME
+% Kalsbeek contouring
+% ------- CHECK THIS IF WE HAVE TIME --------
 % set parameters:
 % number of x and y nodes for grid
 % make these smaller if you get an error about excceding the max array size
@@ -181,8 +182,8 @@ disp('gridding done')
 
 % K-MEDOID CLUSTERING
 
-% ginput can be used to add seeds for k-medoid or k-meand with mouse - not
-% implemented at the moment
+% ginput can be used to add seeds for k-medoid or k-meand with mouse
+% ----- not implemented at the moment ---------
 % button = 1; xx = []; yy=[];
 % while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
 
@@ -303,6 +304,7 @@ for i = 1:nClass
 
     % show rotated poles in polar plot
     figure('WindowStyle','docked');
+    sgtitle(['Class ID = ' num2str(class)])
     subplot(1,5,1)
     plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
     hold on
@@ -361,8 +363,7 @@ for i = 1:nClass
     grid on
     set(gca, 'PlotBoxAspectRatio', [1,2,1])
     disp(strcat('-> ', outcome));
-    tNodes = title(outcome);
-    % set(tNodes, 'horizontalAlignment', 'l')
+    title(outcome);
     
     % X_b = phi_prime should be uniformly distributed U(0, 2pi)
     % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
@@ -398,16 +399,11 @@ for i = 1:nClass
     grid on
     set(gca, 'PlotBoxAspectRatio', [1,2,1])
     disp(strcat('-> ', outcome));
-    tNodes = title(outcome);
-    % set(tNodes, 'horizontalAlignment', 'l')
+    title(outcome);
 
     % rotate original data to mean pole (3pi/2 - alpha, beta - pi) with rotation
     % matrix A_second, obtained from rotation vector axis_second and
     % rotation angle angle_second
-    % axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
-    %                     [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]);
-    % angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
-    %                     [cos(beta-pi)*cos(3*pi/2-alpha) sin(beta-pi)*cos(3*pi/2-alpha) -sin(3*pi/2-alpha)]));
     axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
                         [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
     angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
@@ -457,10 +453,9 @@ for i = 1:nClass
     X_c = phi_second.*sqrt(sin(theta_second));
     % empirical cumulative distribution
     [~,X_c_ecdf] = ecdf(X_c);
-    % create uniform distribution U(0, 2pi)
-    % normDist = makedist('Normal','mu',0,'sigma',1/fisherK(i));
-    % normDist = makedist('Normal','mu',mean(X_c),'sigma',var(X_c));
-    normDist = makedist('Normal','mu',0,'sigma',var(X_c));
+    % create uniform distribution U(0, 2pi) with variance calculated from
+    % transformed data X_c = phi_second * sqrt(sin(theta_second))
+    normDist = makedist('Normal','mu',0,'sigma',std(X_c));
     normPDF = pdf(normDist,X_c_ecdf);
     % Kolmogorov-Smirnov test
     [normLHo,normLPval,~,~] = kstest(X_c,'CDF',normDist);
@@ -483,8 +478,7 @@ for i = 1:nClass
     grid on
     set(gca, 'PlotBoxAspectRatio', [1,2,1])
     disp(strcat('-> ', outcome));
-    tNodes = title(outcome);
-    % set(tNodes, 'horizontalAlignment', 'l')
+    title(outcome);
     
     % save as jpeg
     print('-djpeg',[filename '_Fisher_test_class_' num2str(class) '.jpg'])
@@ -495,8 +489,9 @@ disp('Fisher GOF tests done')
 
 % END FISHER STATISTICS
 
-% STEREOPLOT
+% STEREOPLOT, ROSE AND SUMMARY
 figure('WindowStyle','docked');
+subplot(1,3,1)
 cmap =[ones(1,10)' linspace(1,0,10)' linspace(1,0,10)'];
 
 %draw primitive circle with standard radius = 1
@@ -518,7 +513,7 @@ plot(0,0,'k+')
 
 %plot and label contours
 [c,h] = contour(xi,yi,zi,v,'-k');
-%clabel(c,h);
+clabel(c,h);
 
 % plot cluster poles and means
 for i = 1:nClass
@@ -534,18 +529,6 @@ for i = 1:nClass
     yMean = d.* -cos((meanDir(i))*rad);
     plot(xMean,yMean,'kd','MarkerSize',6,'linewidth',2,'MarkerFaceColor','w');    
 end
-tNodes = title({ ...
-    ['Class ID = ' num2str(keep_class)];...
-    ['Poles in class = ' num2str(countClass) '  -  ' num2str(countClassPercent) '% of total'];...
-    ['Mean Dip / Dir = ' num2str(meanDip) ' / ' num2str(meanDir)];...
-    ['K = ' num2str(fisherK)];...
-    ['99% confidence cone apical angle = ' num2str(confC)];...
-    ['68.26% variability spherical aperture = ' num2str(spherAp)];...
-    'Concentrations % of total per 1% area';...
-    ['Maximum concentration = ' num2str(max(zNodes))] ...
-    });
-% set(tNodes, 'horizontalAlignment', 'l')
-%draw grid for primitive circle with standard radius = 1
 for d = sqrt(2) * sin((10:10:80)*rad/2)
     xNodes = d * cos(linspace(0,2*pi,180));
     yNodes = d * sin(linspace(0,2*pi,180));
@@ -557,27 +540,17 @@ for d = (10:10:180)*rad
     plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
 end
 
-
-% save as jpeg
-print('-djpeg',[filename '_contour_Km.jpg'])
-disp(' ')
-disp('stereoplot done')
-
-% END STEREOPLOT
-
-% ROSE DIAGRAM
-
 % strike (used by rose diagram only)
 Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
 SymmetricStrike = [Strike; (Strike<=180).*(Strike+180)+(Strike>180).*(Strike-180)];
 
 % plot rose diagram
-figure('WindowStyle','docked');
 % geologic rose plot inpired by earth_rose.m by Cameron Sparr
 % in turn inspired by wind_rose.m
 % The code to change the axis labels from a mathematical system to
 % N,S,E,W were written by Jordan Rosenthal in a forum post:
 % http://www.mathworks.com/matlabcentral/newsreader/author/4601
+subplot(1,3,2)
 D = mod(90 - SymmetricStrike, 360)*pi/180;
 rose(D, 36);   % rose with bins at 10° increment
 hHiddenText = findall(gca,'type','text');
@@ -601,17 +574,21 @@ for ang = Angles
     end
 end
 delete(hObjToDelete(hObjToDelete~=0));
-tNodes = title({ ...
-    ['Class ID = ' num2str(keep_class)];...
-    ['Poles in class = ' num2str(countClass), '  -  ' num2str(countClassPercent) '% of total'];...
-    ['Mean Dip / Dir = ' num2str(meanDip) ' / ' num2str(meanDir)];...
-    ['K = ' num2str(fisherK)];...
-    ['99% confidence cone apical angle = ' num2str(confC)];...
-    ['68.26% variability spherical aperture = ' num2str(spherAp)];...
-    'Concentrations % of total per 1% area';...
-    ['Maximum concentration = ' num2str(max(zNodes))] ...
-    });
-% set(tNodes, 'horizontalAlignment', 'left')
+subplot(1,3,3)
+axis off
+outcome = { ...
+    ['                        Class ID = ' num2str(keep_class,'%12d')         ];...
+    ['                  Poles in class = ' num2str(countClass,'%12d')         ];...
+    ['                      % of total = ' num2str(countClassPercent,'%12.2f')];...
+    ['                        Mean Dir = ' num2str(meanDir,'%12.2f')          ];...
+    ['                        Mean Dip = ' num2str(meanDip,'%12.2f')          ];...
+    ['                               K = ' num2str(fisherK,'%12.2f')          ];...
+    ['            99% conf. cone angle = ' num2str(confC,'%12.2f')            ];...
+    ['  68.26% variability sph. apert. = ' num2str(spherAp,'%12.2f')          ];...
+    [''                                                                       ];...
+    ['Max conc. % of total per 1% area = ' num2str(max(zNodes),'%12.2f')      ] ...
+    };
+text(0,0.6,outcome','HorizontalAlignment','left','VerticalAlignment','top','FontName','Courier');
 
 % save as jpeg
 print('-djpeg',[filename '_rose_Km.jpg'])
@@ -622,7 +599,7 @@ disp('rose diagram done')
 
 % SAVE
 
-% save with class
+% save with class annotation
 if inDataFormat == 1
     out_data = [DipDirection Dip idClass];
 elseif inDataFormat == 2
@@ -634,14 +611,6 @@ elseif inDataFormat == 4
 end
 out_data = out_data(find(ismember(out_data(:,3),keep_class)),:);
 csvwrite([filename '_classified.csv'],out_data)  % add header with column names?
-
-% Results table
-% Class_number = cell2table(keep_class);
-% Mean_Dip_Dir = num2str(meanDir);
-% Mean_Dip = num2str(meanDip);
-% Fisher_K = num2str(fisherK);
-% Results_table = table(Class_number, Mean_Dip_Dir, Mean_Dip, Fisher_K);
-% writetable(Results_table, [file '_results_table']);
 
 disp(' ')
 disp('output done')
