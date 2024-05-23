@@ -76,7 +76,7 @@ Mpole = cos(Plunge*rad).*sin(Trend*rad);
 Npole = -sin(Plunge*rad);
 
 % symmetric unit vectors in upper hemisphere ("reflected unit vectors")
-Lpole_neg = -Lpole; 
+Lpole_neg = -Lpole;
 Mpole_neg = -Mpole;
 Npole_neg = -Npole;
 
@@ -133,7 +133,8 @@ disp('grid nodes done')
 % define counting cone for contouring grid
 % key = 2.0;
 % cone = (acos(Ndata/(Ndata+key^2)))*deg;
-cone = 8.1096144559941786958201832872484; %%% http://en.wikipedia.org/wiki/Solid_angle
+% http://en.wikipedia.org/wiki/Solid_angle
+cone = 8.1096144559941786958201832872484;
 
 %count point density at all 331 nodes
 for i = 1:331
@@ -181,27 +182,46 @@ disp('gridding done')
 % END CONTOURING
 
 % K-MEDOID CLUSTERING
+while 1
+    while 1
+        disp(' ')
+        disp('Clustering options [1]:')
+        disp('   1: automatic K-medoid centroids')
+        disp('   2: input centroids with mouse')
+        inDataFormat = input('>> ');
+        if inDataFormat == 1 | inDataFormat == 2, break; end
+    end
+    if inDataFormat == 2
+        % ginput can be used to add seeds for k-medoid or k-meand with mouse
+        % ----- not implemented at the moment ---------
+        % button = 1; xx = []; yy=[];
+        % while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
+        % TEMPORARY clustering with k-medoids
+        nClass = 2;
+        idClass = kmedoids([Lpole Mpole Npole],nClass);
+    else
+        % number of classes with automatic seed initialization
+        disp(' ')
+        disp('Number of classes for K-medoid clustering [1]:')
+        nClass = input('>> ');
+        if isempty(nClass), nClass = 1; end
+        if nClass < 1, nClass = 1; end
+        nClass = round(nClass)*2;
+        % clustering with k-medoids
+        idClass = kmedoids([Lpole Mpole Npole],nClass);
+    end
+    % count classes
+    countClass = zeros(1,nClass);
+    for i = 1:nClass
+        countClass(i) = sum(idClass==i);
+    end
+    countClassPercent = countClass./Ndata.*100;
 
-% ginput can be used to add seeds for k-medoid or k-meand with mouse
-% ----- not implemented at the moment ---------
-% button = 1; xx = []; yy=[];
-% while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
-
-% number of classes with automatic seed initialization
-disp(' ')
-disp('Number of classes for K-medoid clustering [1]:')
-nClass = input('>> ');
-if isempty(nClass), nClass = 1; end
-if nClass < 1, nClass = 1; end
-nClass = round(nClass)*2;
-
-% clustering with k-medoids
-idClass = kmedoids([Lpole Mpole Npole],nClass);
-countClass = zeros(1,nClass);
-for i = 1:nClass
-    countClass(i) = sum(idClass==i);
+    disp(' ')
+    disp('Done with clustering? [y]:')
+    done = input('>> ', 's');
+    if done == 'y', break; end
 end
-countClassPercent = countClass./Ndata.*100;
 disp(' ')
 disp('K-medoid clustering done')
 
@@ -281,8 +301,8 @@ for i = 1:nClass
     M = Mpole(idClass==class);
     N = Npole(idClass==class);
     cartCords = [L';
-                 M';
-                 N'];
+        M';
+        N'];
 
     % define alpha, beta in rad
     alpha = meanPlunge(i)*rad;
@@ -309,13 +329,13 @@ for i = 1:nClass
     plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
     hold on
     plot(sqrt(2) * sin(-theta_prime/2).* sin(phi_prime), ...
-         sqrt(2) * sin(-theta_prime/2).* cos(phi_prime), ...
-         'o');
+        sqrt(2) * sin(-theta_prime/2).* cos(phi_prime), ...
+        'o');
     axis equal
     axis tight
     set(gca,'XTick',[], 'YTick', [])
     title({'Original data rotated to';...
-           'mean pole (\alpha, \beta)'})
+        'mean pole (\alpha, \beta)'})
     %draw grid for primitive circle with standard radius = 1
     for d = sqrt(2) * sin((10:10:80)*rad/2)
         xNodes = d * cos(linspace(0,2*pi,180));
@@ -348,12 +368,12 @@ for i = 1:nClass
     disp('Kolmogorov-Smirnov GOF test for 1 - cos(theta_prime):')
     if ExpLHo == 0
         outcome = {'Exponential dist. E(1/K)';...
-                   'ACCEPTED at 5% sign.';...
-                  ['with P-value = ' num2str(ExpLPval)]};
+            'ACCEPTED at 5% sign.';...
+            ['with P-value = ' num2str(ExpLPval)]};
     else
         outcome = {'Exponential dist. E(1/FisherK)';...
-                   'REJECTED at 5% sign.';...
-                  ['with P-value = ' num2str(ExpLPval)]};
+            'REJECTED at 5% sign.';...
+            ['with P-value = ' num2str(ExpLPval)]};
     end
     % plotting
     subplot(1,5,2)
@@ -364,30 +384,30 @@ for i = 1:nClass
     set(gca, 'PlotBoxAspectRatio', [1,2,1])
     disp(strcat('-> ', outcome));
     title(outcome);
-    
+
     % X_b = phi_prime should be uniformly distributed U(0, 2pi)
     % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
     % Test with Kuiper thanks to:
     % https://it.mathworks.com/matlabcentral/fileexchange/50158-kuiper-test
     X_b = phi_prime;
     X_b = X_b + 2*pi*(X_b<0);
-    % empirical cumulative distribution 
+    % empirical cumulative distribution
     [~,X_b_ecdf] = ecdf(X_b);
     % create uniform distribution U(0, 2pi)
     uniDist = makedist('Uniform','lower',0,'upper',2*pi);
     uniPDF = pdf(uniDist,X_b_ecdf);
-    % Kuiper test 
+    % Kuiper test
     [UniLHo,UniLPval,~,~] = kuipertest(X_b,'CDF',uniDist);
     disp(' ')
     disp('Kuiper GOF test for phi_prime / 2pi:')
     if UniLHo == 0
         outcome = {'Uniform dist. U(0, 2\pi)';...
-                   'ACCEPTED at 5% sign.';...
-                  ['with P-value = ' num2str(UniLPval)]};
+            'ACCEPTED at 5% sign.';...
+            ['with P-value = ' num2str(UniLPval)]};
     else
         outcome = {'Uniform dist. U(0, 2\pi)';...
-                   'REJECTED at 5% sign.';...
-                  ['with P-value = ' num2str(UniLPval)]};
+            'REJECTED at 5% sign.';...
+            ['with P-value = ' num2str(UniLPval)]};
     end
     % plotting
     subplot(1,5,3)
@@ -405,9 +425,9 @@ for i = 1:nClass
     % matrix A_second, obtained from rotation vector axis_second and
     % rotation angle angle_second
     axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
-                        [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
+        [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
     angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
-                        [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]));
+        [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]));
     axis_second = axis_second / sin(angle_second);
     disp(' '); disp('axis_second'); disp(atan2(axis_second(2), axis_second(1))*deg); disp('angle_second'); disp(angle_second*deg);
     A_second = axang2rotm([axis_second angle_second]);
@@ -429,7 +449,7 @@ for i = 1:nClass
     axis tight
     set(gca,'XTick',[], 'YTick', [])
     title({'Original data rotated to';...
-           'mean pole (3/2\pi - \alpha, \beta - \pi)'})
+        'mean pole (3/2\pi - \alpha, \beta - \pi)'})
     %draw grid for primitive circle with standard radius = 1
     for d = sqrt(2) * sin((10:10:80)*rad/2)
         xNodes = d * cos(linspace(0,2*pi,180));
@@ -463,12 +483,12 @@ for i = 1:nClass
     disp('Kolmogorov-Smirnov GOF test for phi_second * sqrt(sin(theta_second)):')
     if normLHo == 0
         outcome = {'Normal dist. N(0, 1/K)';...
-                   'ACCEPTED at 5% sign.';...
-                   ['with P-value = ' num2str(normLPval)]};
+            'ACCEPTED at 5% sign.';...
+            ['with P-value = ' num2str(normLPval)]};
     else
         outcome = {'Normal dist. N(0, 1/K)';...
-                   'REJECTED at 5% sign.';...
-                   ['with P-value = ' num2str(normLPval)]};
+            'REJECTED at 5% sign.';...
+            ['with P-value = ' num2str(normLPval)]};
     end
     % plotting
     subplot(1,5,5)
@@ -479,7 +499,7 @@ for i = 1:nClass
     set(gca, 'PlotBoxAspectRatio', [1,2,1])
     disp(strcat('-> ', outcome));
     title(outcome);
-    
+
     % save as jpeg
     print('-djpeg',[filename '_Fisher_test_class_' num2str(class) '.jpg'])
 end
@@ -527,7 +547,7 @@ for i = 1:nClass
     d = sqrt(2) * sin(meanTheta/2);
     xMean = d.* -sin((meanDir(i))*rad);
     yMean = d.* -cos((meanDir(i))*rad);
-    plot(xMean,yMean,'kd','MarkerSize',6,'linewidth',2,'MarkerFaceColor','w');    
+    plot(xMean,yMean,'kd','MarkerSize',6,'linewidth',2,'MarkerFaceColor','w');
 end
 for d = sqrt(2) * sin((10:10:80)*rad/2)
     xNodes = d * cos(linspace(0,2*pi,180));
