@@ -199,7 +199,7 @@ while 1
         % while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
         % TEMPORARY clustering with k-medoids
         nClass = 2;
-        idClass = kmedoids([Lpole Mpole Npole],nClass,'Options',statset('UseParallel',true),'Start',[]);
+        idClass = kmedoids([Lpole Mpole Npole],nClass,'Options',statset('UseParallel',true),'Start',[]); %  CHECK THIS FOR GINPUT
     else
         % number of classes with automatic seed initialization
         disp(' ')
