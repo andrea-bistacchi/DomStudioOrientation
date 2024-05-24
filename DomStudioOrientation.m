@@ -5,8 +5,9 @@ function DomStudioOrientation(~)
 %
 % Last update by Andrea Bistacchi, Stefano Casiraghi and Gabriele Benedetti 30/4/2024
 
-% initialize
+% initialize including parallel pool
 clear all; close all; clc; clearvars;
+if isempty(gcp('nocreate')), parpool(gpuDeviceCount("available")); end
 addpath("kuipertest")
 rad = pi/180;
 deg = 180/pi;
@@ -198,7 +199,7 @@ while 1
         % while button ==1, [x,y,button] = ginput(1); xx = [xx x]; yy = [yy y]; end
         % TEMPORARY clustering with k-medoids
         nClass = 2;
-        idClass = kmedoids([Lpole Mpole Npole],nClass);
+        idClass = kmedoids([Lpole Mpole Npole],nClass,'Options',statset('UseParallel',true),'Start',[]);
     else
         % number of classes with automatic seed initialization
         disp(' ')
@@ -208,7 +209,7 @@ while 1
         if nClass < 1, nClass = 1; end
         nClass = round(nClass)*2;
         % clustering with k-medoids
-        idClass = kmedoids([Lpole Mpole Npole],nClass);
+        idClass = kmedoids([Lpole Mpole Npole],nClass,'Options',statset('UseParallel',true));
     end
     % count classes
     countClass = zeros(1,nClass);
