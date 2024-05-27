@@ -667,6 +667,9 @@ while 1
         set(gca, 'PlotBoxAspectRatio', [1,2,1])
         disp(strcat('-> ', outcome));
         title(outcome);
+
+        % save as jpeg
+        print('-djpeg',[filename '_Fisher_test_class_' num2str(class) '.jpg'])
     end
 
     disp(' ')
@@ -678,14 +681,12 @@ while 1
 
     % reactivate subplot in figure 1 and plot cluster poles and means
     axes(fig_1_1)
-
     % clean plot if needed
     try
         for i = 1:length(clust_hand)
             delete(clust_hand(i))
         end
     end
-
     % plot means
     for i = 1:nClass
         class = keep_class(i);
@@ -725,7 +726,6 @@ while 1
     done = input('>> ', 's');
     if done == 'y', break; end
 end
-
 disp(' ')
 disp('K-medoid clustering done')
 
@@ -743,7 +743,6 @@ elseif inDataFormat == 3
 elseif inDataFormat == 4
     out_data = [Plunge Trend idClass];
 end
-
 out_data = out_data(find(ismember(out_data(:,3),keep_class)),:);
 csvwrite([filename '_classified.csv'],out_data)  % add header with column names?
 
