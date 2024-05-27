@@ -17,7 +17,7 @@ deg = 180/pi;
 
 % file overwrite warning
 disp(' ')
-disp('WARNING: this script overwrites output files without asking for confirmaton.')
+disp('---- WARNING: this script overwrites output files without asking for confirmaton ----')
 
 % load CSV file with orientation data
 [file, path] = uigetfile('*.csv');
@@ -91,6 +91,9 @@ DipDirection = [DipDirection; DipDirection];
 Dip = [Dip; Dip];
 Trend = [Trend; Trend];
 Plunge = [Plunge; Plunge];
+
+% strike is used by rose diagram
+Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
 
 % END INPUT AND CHECK DATA
 
@@ -220,41 +223,9 @@ for d = (10:10:180)*rad
 end
 
 % plot rose diagram
-% geologic rose plot inpired by earth_rose.m by Cameron Sparr
-% in turn inspired by wind_rose.m
-% The code to change the axis labels from a mathematical system to
-% N,S,E,W were written by Jordan Rosenthal in a forum post:
-% http://www.mathworks.com/matlabcentral/newsreader/author/4601
 fig_1_2 = subplot(1,3,2);
-
-% strike (used by rose diagram only)
-Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
-SymmetricStrike = [Strike; (Strike<=180).*(Strike+180)+(Strike>180).*(Strike-180)];
-
-% rose with bins at 10° increment
-D = mod(90 - SymmetricStrike, 360)*pi/180;
-rose(D, 36);
-hHiddenText = findall(gca,'type','text');
-Angles = 0 : 30 : 330;
-hObjToDelete = zeros( length(Angles)-4, 1 );
-k = 0;
-for ang = Angles
-    hObj = findall(hHiddenText,'string',num2str(ang));
-    switch ang
-        case 0
-            set(hObj,'string','E','HorizontalAlignment','Left');
-        case 90
-            set(hObj,'string','N','VerticalAlignment','Bottom');
-        case 180
-            set(hObj,'string','W','HorizontalAlignment','Right');
-        case 270
-            set(hObj,'string','S','VerticalAlignment','Top');
-        otherwise
-            k = k + 1;
-            hObjToDelete(k) = hObj;
-    end
-end
-delete(hObjToDelete(hObjToDelete~=0));
+strike_plot = Strike(1:Ndata,:);
+rose_plot(strike_plot, fig_1_2);
 
 % create empty subplot used to show summary text at the end
 fig_1_3 = subplot(1,3,3);
@@ -289,9 +260,10 @@ while 1
             [x,y,button] = ginput(1);
             if button ~= 1; break; end
             in_t = atan2(x,y)*deg;
-            disp(['in_t: ' num2str(in_t)])
-            in_p = asin(sqrt(x^2 + y^2)/ sqrt(2)) / 2 * deg;
-            disp(['in_p: ' num2str(in_p)])
+            in_p = 90 - asin(sqrt(x^2 + y^2)/ sqrt(2))*2*deg;
+            in_t = in_t + 360*(in_t<0);
+            % disp(['in_p: ' num2str(in_p)])
+            % disp(['in_t: ' num2str(in_t)])
             in_pp = [in_pp; in_p];
             in_tt = [in_tt; in_t];
         end
@@ -323,7 +295,7 @@ while 1
             in_M(i) = Mpole(min_id);
             in_N(i) = Npole(min_id);
         end
-        
+
         % clustering with k-medoids
         idClass = kmedoids([Lpole Mpole Npole],nClass,'Options',statset('UseParallel',true),'Start',[in_L in_M in_N]);
 
@@ -380,11 +352,11 @@ while 1
             fisherK(i) = (countClass(i)-1)/(countClass(i)-R);
         else
             fisherK(i) = countClass(i)/(countClass(i)-R)*(1 - 1/countClass(i))^2;
-            disp('----WARNING: n data < 16----')
+            disp('---- WARNING: n data < 16 ----')
         end
 
         % confidence cone apical angle
-        confC(i) = acos( 1 - (countClass(i)-R)/R * ((1/0.01)^(1/(countClass(i)-1)) - 1) )*deg;
+        confC(i) = asin( 1 - (countClass(i)-R)/R * ((1/0.01)^(1/(countClass(i)-1)) - 1) )*deg;
         spherAp(i) = asin(sqrt(2*(1-1/countClass(i))/fisherK(i)))*deg;
 
         % mean dip/dir and plunge/trend
@@ -409,7 +381,6 @@ while 1
     meanDir = meanDir(meanDip<=90);
     meanDip = meanDip(meanDip<=90); % this must be the last one
     nClass = nClass/2;
-
     disp(' ')
     disp('Fisher means and Ks done')
 
@@ -421,6 +392,7 @@ while 1
     % and references therein by the same authors
     for i = 1:nClass
         class = keep_class(i);
+        disp(' ')
         disp(['class: ' num2str(class)])
         disp(['Mean Plunge(i): ' num2str(meanPlunge(i))])
         disp(['Mean Trend:     ' num2str(meanTrend(i))])
@@ -442,231 +414,244 @@ while 1
             fig_2_8(i) = subplot(2,4,8);
         end
 
-        % collect data for this class
-        L = Lpole(idClass==class);
-        M = Mpole(idClass==class);
-        N = Npole(idClass==class);
-        cartCords = [L';
-            M';
-            N'];
+        % manage errors in Fisher test
+        try
 
-        % CONTOURING HERE
+            % collect data for this class
+            L = Lpole(idClass==class);
+            M = Mpole(idClass==class);
+            N = Npole(idClass==class);
+            cartCords = [L';
+                M';
+                N'];
 
-        % ROSE HERE
+            % CONTOUR HERE
+            
+            % plot contour for class
+            % axes(fig_2_1(i))            
 
-        % SUMMARY HERE
+            % plot rose diagram for this class
+            strike_plot = Strike(find(ismember(idClass, class)),:);
+            rose_plot(strike_plot, fig_2_5(i));
 
-        % define alpha, beta in rad
-        alpha = meanPlunge(i)*rad;
-        beta =  meanTrend(i)*rad;
+            % SUMMARY HERE
 
-        % rotate original data to mean pole (alpha, beta) with rotation
-        % matrix A_prime, obtained from rotation vector axis_prime and
-        % rotation angle angle_prime
-        axis_prime = cross([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]);
-        angle_prime = acos(dot([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]));
-        axis_prime = axis_prime / sin(angle_prime);
-        disp(' '); disp('axis_prime'); disp(atan2(axis_prime(2), axis_prime(1))*deg); disp('angle_prime'); disp(angle_prime*deg);
-        A_prime = axang2rotm([axis_prime angle_prime]);
-        cartCords_prime = A_prime * cartCords;
+            % define alpha, beta in rad
+            alpha = meanPlunge(i)*rad;
+            beta =  meanTrend(i)*rad;
 
-        % calculate rotated polar coords in rad
-        theta_prime = acos(cartCords_prime(3,:)); % non-geological spherical coords use acos (geological use -asin)
-        phi_prime = atan2(cartCords_prime(2,:), cartCords_prime(1,:));  % y then x
+            % rotate original data to mean pole (alpha, beta) with rotation
+            % matrix A_prime, obtained from rotation vector axis_prime and
+            % rotation angle angle_prime
+            axis_prime = cross([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]);
+            angle_prime = acos(dot([sumLR(class) sumMR(class) sumNR(class)], [0 0 1]));
+            axis_prime = axis_prime / sin(angle_prime);
+            % disp(' '); disp('axis_prime'); disp(atan2(axis_prime(2), axis_prime(1))*deg); disp('angle_prime'); disp(angle_prime*deg);
+            A_prime = axang2rotm([axis_prime angle_prime]);
+            cartCords_prime = A_prime * cartCords;
 
-        % show rotated poles in polar plot
-        axes(fig_2_2(i))
-        hold off
-        plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
-        hold on
-        plot(sqrt(2) * sin(-theta_prime/2).* sin(phi_prime), ...
-            sqrt(2) * sin(-theta_prime/2).* cos(phi_prime), ...
-            'o');
-        axis equal
-        axis tight
-        set(gca,'XTick',[], 'YTick', [])
-        title({'Original data rotated to';...
-            'mean pole (\alpha, \beta)'})
+            % calculate rotated polar coords in rad
+            theta_prime = acos(cartCords_prime(3,:)); % non-geological spherical coords use acos (geological use -asin)
+            phi_prime = atan2(cartCords_prime(2,:), cartCords_prime(1,:));  % y then x
 
-        %draw grid for primitive circle with standard radius = 1
-        for d = sqrt(2) * sin((10:10:80)*rad/2)
-            xNodes = d * cos(linspace(0,2*pi,180));
-            yNodes = d * sin(linspace(0,2*pi,180));
-            plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+            % show rotated poles in polar plot
+            axes(fig_2_2(i))
+            hold off
+            plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
+            hold on
+            plot(sqrt(2) * sin(-theta_prime/2).* sin(phi_prime), ...
+                sqrt(2) * sin(-theta_prime/2).* cos(phi_prime), ...
+                'o');
+            axis equal
+            axis tight
+            set(gca,'XTick',[], 'YTick', [])
+            title({'Original data rotated to';...
+                'mean pole (\alpha, \beta)'})
+
+            %draw grid for primitive circle with standard radius = 1
+            for d = sqrt(2) * sin((10:10:80)*rad/2)
+                xNodes = d * cos(linspace(0,2*pi,180));
+                yNodes = d * sin(linspace(0,2*pi,180));
+                plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+            end
+            for d = (10:10:180)*rad
+                xNodes = [cos(d) -cos(d)];
+                yNodes = [sin(d) -sin(d)];
+                plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+            end
+
+            % X_a = 1 - cos(theta_prime) should be exponentially distributed
+            % E(1/FisherK) if FisherK >3. Test with KS.
+            % ----------
+            % Note that Fisher & Best, 1987, write E(FisherK), buth this should be
+            % an error, or a different diefinition of FisherK, since there is no way
+            % to fit E(FisherK). 1/FisherK seems OK because for larger FisherK the
+            % std dev should be smaller.
+            % ----------
+            X_a = 1 - cos(theta_prime);
+
+            % empirical cumulative distribution
+            [~,X_a_ecdf] = ecdf(X_a);
+            % create exponential distribution E(1/FisherK)
+            expDist = makedist('Exponential','mu',1/fisherK(i));
+            expPDF = pdf(expDist,X_a_ecdf);
+
+            % Kolmogorov-Smirnov test
+            [ExpLHo,ExpLPval,~,~] = kstest(X_a,'CDF',expDist);
+            disp(' ')
+            disp('Kolmogorov-Smirnov GOF test for 1 - cos(theta_prime):')
+            if ExpLHo == 0
+                outcome = {'Exponential dist. E(1/K)';...
+                    'ACCEPTED at 5% sign.';...
+                    ['with P-value = ' num2str(ExpLPval)]};
+            else
+                outcome = {'Exponential dist. E(1/FisherK)';...
+                    'REJECTED at 5% sign.';...
+                    ['with P-value = ' num2str(ExpLPval)]};
+            end
+            disp(outcome);
+
+            % plot exponential test
+            axes(fig_2_3(i))
+            hold off
+            histogram(X_a,'Normalization','pdf','FaceColor',[.6 .6 .6]);
+            hold on
+            plot(X_a_ecdf,expPDF,'r','linewidth',2)
+            grid on
+            set(gca, 'PlotBoxAspectRatio', [1,2,1])
+            title(outcome);
+
+            % X_b = phi_prime should be uniformly distributed U(0, 2pi)
+            % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
+            % Test with Kuiper thanks to:
+            % https://it.mathworks.com/matlabcentral/fileexchange/50158-kuiper-test
+            X_b = phi_prime;
+            X_b = X_b + 2*pi*(X_b<0);
+
+            % empirical cumulative distribution
+            [~,X_b_ecdf] = ecdf(X_b);
+
+            % create uniform distribution U(0, 2pi)
+            uniDist = makedist('Uniform','lower',0,'upper',2*pi);
+            uniPDF = pdf(uniDist,X_b_ecdf);
+
+            % Kuiper test
+            [UniLHo,UniLPval,~,~] = kuipertest(X_b,'CDF',uniDist);
+            disp(' ')
+            disp('Kuiper GOF test for phi_prime / 2pi:')
+            if UniLHo == 0
+                outcome = {'Uniform dist. U(0, 2\pi)';...
+                    'ACCEPTED at 5% sign.';...
+                    ['with P-value = ' num2str(UniLPval)]};
+            else
+                outcome = {'Uniform dist. U(0, 2\pi)';...
+                    'REJECTED at 5% sign.';...
+                    ['with P-value = ' num2str(UniLPval)]};
+            end
+            disp(outcome);
+
+            % plot normal test
+            axes(fig_2_4(i))
+            hold off
+            histogram(X_b,'Normalization','pdf','FaceColor',[.6 .6 .6],'BinLimits',[0 2*pi]);
+            hold on
+            plot(X_b_ecdf,uniPDF,'r','linewidth',2)
+            xticks([0 .5*pi pi 1.5*pi 2*pi])
+            xticklabels({'0', '\pi/2', '\pi', '3/2\pi', '2\pi'})
+            grid on
+            set(gca, 'PlotBoxAspectRatio', [1,2,1])
+            title(outcome);
+
+            % rotate original data to mean pole (3pi/2 - alpha, beta - pi) with rotation
+            % matrix A_second, obtained from rotation vector axis_second and
+            % rotation angle angle_second
+            axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
+                [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
+            angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
+                [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]));
+            axis_second = axis_second / sin(angle_second);
+            % disp(' '); disp('axis_second'); disp(atan2(axis_second(2), axis_second(1))*deg); disp('angle_second'); disp(angle_second*deg);
+            A_second = axang2rotm([axis_second angle_second]);
+            cartCords_second = A_second * cartCords;
+
+            % calculate rotated polar coords in rad
+            theta_second = acos(cartCords_second(3,:)); % non-geological spherical coords use acos (geological use -asin)
+            phi_second = atan2(cartCords_second(2,:), cartCords_second(1,:));  % y then x
+            phi_second = phi_second -2*pi*(phi_second>pi);
+
+            % show rotated poles in polar plot
+            axes(fig_2_6(i))
+            hold off
+            plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
+            hold on
+            plot(sqrt(2) * sin(theta_second/2).* sin(phi_second), ...
+                sqrt(2) * sin(theta_second/2).* cos(phi_second), ...
+                'o');
+            axis equal
+            axis tight
+            set(gca,'XTick',[], 'YTick', [])
+            title({'Original data rotated to';...
+                'mean pole (3/2\pi - \alpha, \beta - \pi)'})
+
+            %draw grid for primitive circle with standard radius = 1
+            for d = sqrt(2) * sin((10:10:80)*rad/2)
+                xNodes = d * cos(linspace(0,2*pi,180));
+                yNodes = d * sin(linspace(0,2*pi,180));
+                plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+            end
+            for d = (10:10:180)*rad
+                xNodes = [cos(d) -cos(d)];
+                yNodes = [sin(d) -sin(d)];
+                plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+            end
+
+            % X_c = phi_second * sqrt(sin(theta_second)) should be normally
+            % distributed N(0, 1/FisherK). Test with KS.
+            % ----------
+            % Note that Fisher & Best, 1994, write N(0, 1/FisherK), buth this should
+            % be an error, either in X_c or in the rotation, or a different
+            % definition of FisherK, sice there is no way to accept this very
+            % narrow distribution. Must be investigated.
+            % ----------
+            X_c = phi_second.*sqrt(sin(theta_second));
+
+            % empirical cumulative distribution
+            [~,X_c_ecdf] = ecdf(X_c);
+
+            % create uniform distribution U(0, 2pi) with variance calculated from
+            % transformed data X_c = phi_second * sqrt(sin(theta_second))
+            normDist = makedist('Normal','mu',0,'sigma',std(X_c));
+            normPDF = pdf(normDist,X_c_ecdf);
+
+            % Kolmogorov-Smirnov test
+            [normLHo,normLPval,~,~] = kstest(X_c,'CDF',normDist);
+            disp(' ')
+            disp('Kolmogorov-Smirnov GOF test for phi_second * sqrt(sin(theta_second)):')
+            if normLHo == 0
+                outcome = {'Normal dist. N(0, 1/K)';...
+                    'ACCEPTED at 5% sign.';...
+                    ['with P-value = ' num2str(normLPval)]};
+            else
+                outcome = {'Normal dist. N(0, 1/K)';...
+                    'REJECTED at 5% sign.';...
+                    ['with P-value = ' num2str(normLPval)]};
+            end
+            disp(outcome);
+
+            % plot normal test
+            axes(fig_2_7(i))
+            hold off
+            histogram(X_c,'Normalization','pdf','FaceColor',[.6 .6 .6]);
+            hold on
+            plot(X_c_ecdf,normPDF,'r','linewidth',2)
+            grid on
+            set(gca, 'PlotBoxAspectRatio', [1,2,1])
+            title(outcome);
+
+            % manage errors in Fisher test
+        catch
+            warning(['---- WARNING: Fisher test error for class ' num2str(class) ' ----'])
         end
-        for d = (10:10:180)*rad
-            xNodes = [cos(d) -cos(d)];
-            yNodes = [sin(d) -sin(d)];
-            plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
-        end
-
-        % X_a = 1 - cos(theta_prime) should be exponentially distributed
-        % E(1/FisherK) if FisherK >3. Test with KS.
-        % ----------
-        % Note that Fisher & Best, 1987, write E(FisherK), buth this should be
-        % an error, or a different diefinition of FisherK, since there is no way
-        % to fit E(FisherK). 1/FisherK seems OK because for larger FisherK the
-        % std dev should be smaller.
-        % ----------
-        X_a = 1 - cos(theta_prime);
-
-        % empirical cumulative distribution
-        [~,X_a_ecdf] = ecdf(X_a);
-        % create exponential distribution E(1/FisherK)
-        expDist = makedist('Exponential','mu',1/fisherK(i));
-        expPDF = pdf(expDist,X_a_ecdf);
-
-        % Kolmogorov-Smirnov test
-        [ExpLHo,ExpLPval,~,~] = kstest(X_a,'CDF',expDist);
-        disp(' ')
-        disp('Kolmogorov-Smirnov GOF test for 1 - cos(theta_prime):')
-        if ExpLHo == 0
-            outcome = {'Exponential dist. E(1/K)';...
-                'ACCEPTED at 5% sign.';...
-                ['with P-value = ' num2str(ExpLPval)]};
-        else
-            outcome = {'Exponential dist. E(1/FisherK)';...
-                'REJECTED at 5% sign.';...
-                ['with P-value = ' num2str(ExpLPval)]};
-        end
-
-        % plot exponential test 
-        axes(fig_2_3(i))
-        hold off
-        histogram(X_a,'Normalization','pdf','FaceColor',[.6 .6 .6]);
-        hold on
-        plot(X_a_ecdf,expPDF,'r','linewidth',2)
-        grid on
-        set(gca, 'PlotBoxAspectRatio', [1,2,1])
-        disp(strcat('-> ', outcome));
-        title(outcome);
-
-        % X_b = phi_prime should be uniformly distributed U(0, 2pi)
-        % or X_b = phi_prime / 2pi should be uniformly distributed U(0,1))
-        % Test with Kuiper thanks to:
-        % https://it.mathworks.com/matlabcentral/fileexchange/50158-kuiper-test
-        X_b = phi_prime;
-        X_b = X_b + 2*pi*(X_b<0);
-
-        % empirical cumulative distribution
-        [~,X_b_ecdf] = ecdf(X_b);
-
-        % create uniform distribution U(0, 2pi)
-        uniDist = makedist('Uniform','lower',0,'upper',2*pi);
-        uniPDF = pdf(uniDist,X_b_ecdf);
-
-        % Kuiper test
-        [UniLHo,UniLPval,~,~] = kuipertest(X_b,'CDF',uniDist);
-        disp(' ')
-        disp('Kuiper GOF test for phi_prime / 2pi:')
-        if UniLHo == 0
-            outcome = {'Uniform dist. U(0, 2\pi)';...
-                'ACCEPTED at 5% sign.';...
-                ['with P-value = ' num2str(UniLPval)]};
-        else
-            outcome = {'Uniform dist. U(0, 2\pi)';...
-                'REJECTED at 5% sign.';...
-                ['with P-value = ' num2str(UniLPval)]};
-        end
-
-        % plot normal test
-        axes(fig_2_4(i))
-        hold off
-        histogram(X_b,'Normalization','pdf','FaceColor',[.6 .6 .6],'BinLimits',[0 2*pi]);
-        hold on
-        plot(X_b_ecdf,uniPDF,'r','linewidth',2)
-        xticks([0 .5*pi pi 1.5*pi 2*pi])
-        xticklabels({'0', '\pi/2', '\pi', '3/2\pi', '2\pi'})
-        grid on
-        set(gca, 'PlotBoxAspectRatio', [1,2,1])
-        disp(strcat('-> ', outcome));
-        title(outcome);
-
-        % rotate original data to mean pole (3pi/2 - alpha, beta - pi) with rotation
-        % matrix A_second, obtained from rotation vector axis_second and
-        % rotation angle angle_second
-        axis_second = cross([sumLR(class) sumMR(class) sumNR(class)], ...
-            [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]);
-        angle_second =  acos(dot([sumLR(class) sumMR(class) sumNR(class)], ...
-            [cos(-pi)*cos(3*pi/2) sin(-pi)*cos(3*pi/2) -sin(3*pi/2)]));
-        axis_second = axis_second / sin(angle_second);
-        disp(' '); disp('axis_second'); disp(atan2(axis_second(2), axis_second(1))*deg); disp('angle_second'); disp(angle_second*deg);
-        A_second = axang2rotm([axis_second angle_second]);
-        cartCords_second = A_second * cartCords;
-
-        % calculate rotated polar coords in rad
-        theta_second = acos(cartCords_second(3,:)); % non-geological spherical coords use acos (geological use -asin)
-        phi_second = atan2(cartCords_second(2,:), cartCords_second(1,:));  % y then x
-        phi_second = phi_second -2*pi*(phi_second>pi);
-
-        % show rotated poles in polar plot
-        axes(fig_2_6(i))
-        hold off
-        plot(cos(linspace(0,2*pi,180)), sin(linspace(0,2*pi,180)),'k-')
-        hold on
-        plot(sqrt(2) * sin(theta_second/2).* sin(phi_second), ...
-            sqrt(2) * sin(theta_second/2).* cos(phi_second), ...
-            'o');
-        axis equal
-        axis tight
-        set(gca,'XTick',[], 'YTick', [])
-        title({'Original data rotated to';...
-            'mean pole (3/2\pi - \alpha, \beta - \pi)'})
-
-        %draw grid for primitive circle with standard radius = 1
-        for d = sqrt(2) * sin((10:10:80)*rad/2)
-            xNodes = d * cos(linspace(0,2*pi,180));
-            yNodes = d * sin(linspace(0,2*pi,180));
-            plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
-        end
-        for d = (10:10:180)*rad
-            xNodes = [cos(d) -cos(d)];
-            yNodes = [sin(d) -sin(d)];
-            plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
-        end
-
-        % X_c = phi_second * sqrt(sin(theta_second)) should be normally
-        % distributed N(0, 1/FisherK). Test with KS.
-        % ----------
-        % Note that Fisher & Best, 1994, write N(0, 1/FisherK), buth this should
-        % be an error, either in X_c or in the rotation, or a different
-        % definition of FisherK, sice there is no way to accept this very
-        % narrow distribution. Must be investigated.
-        % ----------
-        X_c = phi_second.*sqrt(sin(theta_second));
-
-        % empirical cumulative distribution
-        [~,X_c_ecdf] = ecdf(X_c);
-
-        % create uniform distribution U(0, 2pi) with variance calculated from
-        % transformed data X_c = phi_second * sqrt(sin(theta_second))
-        normDist = makedist('Normal','mu',0,'sigma',std(X_c));
-        normPDF = pdf(normDist,X_c_ecdf);
-
-        % Kolmogorov-Smirnov test
-        [normLHo,normLPval,~,~] = kstest(X_c,'CDF',normDist);
-        disp(' ')
-        disp('Kolmogorov-Smirnov GOF test for phi_second * sqrt(sin(theta_second)):')
-        if normLHo == 0
-            outcome = {'Normal dist. N(0, 1/K)';...
-                'ACCEPTED at 5% sign.';...
-                ['with P-value = ' num2str(normLPval)]};
-        else
-            outcome = {'Normal dist. N(0, 1/K)';...
-                'REJECTED at 5% sign.';...
-                ['with P-value = ' num2str(normLPval)]};
-        end
-
-        % plot normal test
-        axes(fig_2_7(i))
-        hold off
-        histogram(X_c,'Normalization','pdf','FaceColor',[.6 .6 .6]);
-        hold on
-        plot(X_c_ecdf,normPDF,'r','linewidth',2)
-        grid on
-        set(gca, 'PlotBoxAspectRatio', [1,2,1])
-        disp(strcat('-> ', outcome));
-        title(outcome);
     end
 
     disp(' ')
@@ -723,6 +708,7 @@ while 1
     disp('Done with clustering? [y]:')
     commandwindow
     done = input('>> ', 's');
+    if isempty(done), done = 'y'; end
     if done == 'y', break; end
 end
 
@@ -751,4 +737,46 @@ disp(' ')
 disp('output done')
 
 % END SAVE
+
+%% function rose_plot
+% geologic rose plot inpired by earth_rose.m by Cameron Sparr
+% in turn inspired by wind_rose.m
+% The code to change the axis labels from a mathematical system to
+% N,S,E,W were written by Jordan Rosenthal in a forum post:
+% http://www.mathworks.com/matlabcentral/newsreader/author/4601
+function rose_plot(strike, target_fig)
+
+% focus to figure or subplot axes
+axes(target_fig)
+
+% strike (used by rose diagram only)
+SymmetricStrike = [strike; (strike<=180).*(strike+180)+(strike>180).*(strike-180)];
+
+% rose with bins at 10° increment
+D = mod(90 - SymmetricStrike, 360)*pi/180;
+rose(D, 36);
+hHiddenText = findall(gca,'type','text');
+Angles = 0 : 30 : 330;
+hObjToDelete = zeros( length(Angles)-4, 1 );
+k = 0;
+for ang = Angles
+    hObj = findall(hHiddenText,'string',num2str(ang));
+    switch ang
+        case 0
+            set(hObj,'string','E','HorizontalAlignment','Left');
+        case 90
+            set(hObj,'string','N','VerticalAlignment','Bottom');
+        case 180
+            set(hObj,'string','W','HorizontalAlignment','Right');
+        case 270
+            set(hObj,'string','S','VerticalAlignment','Top');
+        otherwise
+            k = k + 1;
+            hObjToDelete(k) = hObj;
+    end
+end
+delete(hObjToDelete(hObjToDelete~=0));
+
+%% function contour plot
+function contour_plot(L, M, N, target_fig)
 
