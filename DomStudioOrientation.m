@@ -7,7 +7,7 @@ function DomStudioOrientation(~)
 
 % initialize including parallel pool
 clear all; close all; clc; clearvars;
-if isempty(gcp('nocreate')), parpool(gpuDeviceCount("available")); end
+if isempty(gcp('nocreate')), parpool('Threads',gpuDeviceCount("available")); end
 addpath("kuipertest")
 rad = pi/180;
 deg = 180/pi;
