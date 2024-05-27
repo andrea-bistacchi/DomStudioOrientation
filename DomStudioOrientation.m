@@ -12,6 +12,7 @@ if isempty(gcp('nocreate')), parpool('Threads',gpuDeviceCount("available")); end
 addpath("kuipertest")
 rad = pi/180;
 deg = 180/pi;
+cmap =[ones(1,10)' linspace(1,0,10)' linspace(1,0,10)'];
 
 % INPUT AND CHECK DATA
 
@@ -97,130 +98,12 @@ Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirecti
 
 % END INPUT AND CHECK DATA
 
-% CONTOURING
-
-% plunge/trend of grid node vectors for contouring grid by direct calculation
-n = 1;
-pNodes(n) = 90;
-tNodes(n) = 0;
-for i = 1:10
-    m = 6*i;
-    radius = i/10;
-    DeltaPhi = 360/m;
-    for j = 1:m
-        phi = j*DeltaPhi;
-        n = n+1;
-        tNodes(n) = phi;
-        theta = 2 * asin(radius/sqrt(2))*deg;
-        pNodes(n) = 90 - theta;
-    end
-end
-
-% direction cosines (l,m,n) of grid node vectors for contouring grid
-for i = 1:331
-    Lnodes(i) = cos(pNodes(i)*rad) * cos(tNodes(i)*rad);
-    Mnodes(i) = cos(pNodes(i)*rad) * sin(tNodes(i)*rad);
-    Nnodes(i) = -sin(pNodes(i)*rad);
-end
-
-% (x,y) coordinates of nodes for contouring grid from plunge/trend
-for n = 1:331
-    theta = (90-pNodes(n))*rad;
-    d = sqrt(2) * sin(theta/2);
-    xNodes(n) = d .* sin(tNodes(n)*rad);
-    yNodes(n) = d .* cos(tNodes(n)*rad);
-end
-disp(' ')
-disp('grid nodes done')
-
-% define counting cone for contouring grid
-% key = 2.0;
-% cone = (acos(Ndata/(Ndata+key^2)))*deg;
-% http://en.wikipedia.org/wiki/Solid_angle
-cone = 8.1096144559941786958201832872484;
-
-%count point density at all 331 nodes
-for i = 1:331
-    zNodes(i) = 0;
-    %dot product of node vectors and data vectors
-    for j = 1:Ndata
-        theta = (acos(Lnodes(i)*Lpole(j) + Mnodes(i)*Mpole(j) + Nnodes(i)*Npole(j)))*deg;
-        if theta <= cone
-            zNodes(i) = zNodes(i)+1;
-        end
-    end
-end
-disp(' ')
-disp('point density done')
-
-%convert counts to percent
-zNodes = zNodes/Ndata*100;
-disp(' ')
-disp('density percent done')
-
-% Kalsbeek contouring
-% ------- CHECK THIS IF WE HAVE TIME --------
-% set parameters:
-% number of x and y nodes for grid
-% make these smaller if you get an error about excceding the max array size
-% nx = 50;
-nx = 90;
-ny = nx;
-% number of contours:
-ci = 5;
-e=xNodes;
-n=yNodes;
-hh=zNodes;
-%Grid the data linearly:
-estep = abs((min(e)-max(e))/nx);
-nstep = abs((min(n)-max(n))/ny);
-ee = min(e):estep:max(e);
-nn = min(n):nstep:max(n);
-[xi,yi,zi] = griddata(e,n,hh,ee,nn');
-% v = floor(min(hh)):ci:max(hh);
-v = floor(linspace(min(hh),max(hh),ci));
-disp(' ')
-disp('gridding done')
-
-% END CONTOURING
-
 % STEREOPLOT & ROSE
 fig_1 = figure('WindowStyle','docked');
 fig_1_1 = subplot(1,3,1);
-cmap =[ones(1,10)' linspace(1,0,10)' linspace(1,0,10)'];
-
-%draw primitive circle with standard radius = 1
-xNodes = cos(linspace(0,2*pi,180));
-yNodes = sin(linspace(0,2*pi,180));
-plot(xNodes,yNodes,'k-')
-hold on
-axis equal
-axis off
-imagesc(ee',nn',zi)
-colormap(cmap)
-plot(xNodes,yNodes,'k-')
-plot(0,0,'k+')
-plot(1,0,'k+')
-plot(0,1,'k+')
-plot(-1,0,'k+')
-plot(0,-1,'k+')
-plot(0,0,'k+')
 
 %plot and label contours
-[c,h] = contour(xi,yi,zi,v,'-k');
-clabel(c,h);
-
-% plot polar grid
-for d = sqrt(2) * sin((10:10:80)*rad/2)
-    xNodes = d * cos(linspace(0,2*pi,180));
-    yNodes = d * sin(linspace(0,2*pi,180));
-    plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
-end
-for d = (10:10:180)*rad
-    xNodes = [cos(d) -cos(d)];
-    yNodes = [sin(d) -sin(d)];
-    plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
-end
+max_conc = contour_plot(Lpole, Mpole, Npole, fig_1_1);
 
 % plot rose diagram
 fig_1_2 = subplot(1,3,2);
@@ -262,8 +145,7 @@ while 1
             in_t = atan2(x,y)*deg;
             in_p = 90 - asin(sqrt(x^2 + y^2)/ sqrt(2))*2*deg;
             in_t = in_t + 360*(in_t<0);
-            % disp(['in_p: ' num2str(in_p)])
-            % disp(['in_t: ' num2str(in_t)])
+            disp(['Picked centroid [plunge/trend]: ' num2str(in_p, '%.0f') '/' num2str(in_t, '%.0f')])
             in_pp = [in_pp; in_p];
             in_tt = [in_tt; in_t];
         end
@@ -323,6 +205,7 @@ while 1
 
     % Fisher's mean and K
     for i = 1:nClass
+        disp(' ')
         disp(['Class: ' num2str(i)])
 
         % collect data for class
@@ -416,25 +299,37 @@ while 1
 
         % manage errors in Fisher test
         try
-
             % collect data for this class
             L = Lpole(idClass==class);
             M = Mpole(idClass==class);
             N = Npole(idClass==class);
             cartCords = [L';
-                M';
-                N'];
+                         M';
+                         N'];
 
-            % CONTOUR HERE
-            
-            % plot contour for class
-            % axes(fig_2_1(i))            
+            %plot and label contours for class
+            max_conc_class(i) = contour_plot(L, M, N, fig_2_1(i));
 
             % plot rose diagram for this class
             strike_plot = Strike(find(ismember(idClass, class)),:);
             rose_plot(strike_plot, fig_2_5(i));
 
-            % SUMMARY HERE
+            % plot summary for this class
+            axes(fig_2_8(i))
+            axis off
+            outcome = { ...
+                ['                        Class ID = ' num2str(keep_class(i),'%12d')         ];...
+                ['                  Poles in class = ' num2str(countClass(i),'%12d')         ];...
+                ['                      % of total = ' num2str(countClassPercent(i),'%12.2f')];...
+                ['                        Mean Dir = ' num2str(meanDir(i),'%12.2f')          ];...
+                ['                        Mean Dip = ' num2str(meanDip(i),'%12.2f')          ];...
+                ['                               K = ' num2str(fisherK(i),'%12.2f')          ];...
+                ['            99% conf. cone angle = ' num2str(confC(i),'%12.2f')            ];...
+                ['  68.26% variability sph. apert. = ' num2str(spherAp(i),'%12.2f')          ];...
+                [''                                                                       ];...
+                ['Max conc. % of total per 1% area = ' num2str(max_conc_class(i),'%12.2f')      ] ...
+                };
+            text(0,0.4,outcome','HorizontalAlignment','left','VerticalAlignment','top','FontName','Courier');
 
             % define alpha, beta in rad
             alpha = meanPlunge(i)*rad;
@@ -698,7 +593,7 @@ while 1
         ['            99% conf. cone angle = ' num2str(confC,'%12.2f')            ];...
         ['  68.26% variability sph. apert. = ' num2str(spherAp,'%12.2f')          ];...
         [''                                                                       ];...
-        ['Max conc. % of total per 1% area = ' num2str(max(zNodes),'%12.2f')      ] ...
+        ['Max conc. % of total per 1% area = ' num2str(max_conc,'%12.2f')      ] ...
         };
     text(0,0.6,outcome','HorizontalAlignment','left','VerticalAlignment','top','FontName','Courier');
 
@@ -735,6 +630,8 @@ csvwrite([filename '_classified.csv'],out_data)  % add header with column names?
 
 disp(' ')
 disp('output done')
+
+end
 
 % END SAVE
 
@@ -777,6 +674,138 @@ for ang = Angles
 end
 delete(hObjToDelete(hObjToDelete~=0));
 
-%% function contour plot
-function contour_plot(L, M, N, target_fig)
+end
 
+%% function contour plot
+% contour plot fron direction cosines, outputs % maximum concentration
+function max_conc = contour_plot(Lpole, Mpole, Npole, target_fig)
+
+% focus to figure or subplot axes
+axes(target_fig)
+
+% initialize
+rad = pi/180;
+deg = 180/pi;
+cmap =[ones(1,10)' linspace(1,0,10)' linspace(1,0,10)'];
+Ndata = length(Lpole);
+
+% plunge/trend of grid node vectors for contouring grid by direct calculation
+n = 1;
+pNodes(n) = 90;
+tNodes(n) = 0;
+for i = 1:10
+    m = 6*i;
+    radius = i/10;
+    DeltaPhi = 360/m;
+    for j = 1:m
+        phi = j*DeltaPhi;
+        n = n+1;
+        tNodes(n) = phi;
+        theta = 2 * asin(radius/sqrt(2))*deg;
+        pNodes(n) = 90 - theta;
+    end
+end
+
+% direction cosines (l,m,n) of grid node vectors for contouring grid
+for i = 1:331
+    Lnodes(i) = cos(pNodes(i)*rad) * cos(tNodes(i)*rad);
+    Mnodes(i) = cos(pNodes(i)*rad) * sin(tNodes(i)*rad);
+    Nnodes(i) = -sin(pNodes(i)*rad);
+end
+
+% (x,y) coordinates of nodes for contouring grid from plunge/trend
+for n = 1:331
+    theta = (90-pNodes(n))*rad;
+    d = sqrt(2) * sin(theta/2);
+    xNodes(n) = d .* sin(tNodes(n)*rad);
+    yNodes(n) = d .* cos(tNodes(n)*rad);
+end
+disp(' ')
+disp('grid nodes done')
+
+% define counting cone for contouring grid
+% key = 2.0;
+% cone = (acos(Ndata/(Ndata+key^2)))*deg;
+% http://en.wikipedia.org/wiki/Solid_angle
+cone = 8.1096144559941786958201832872484;
+
+%count point density at all 331 nodes
+for i = 1:331
+    zNodes(i) = 0;
+    %dot product of node vectors and data vectors
+    for j = 1:Ndata
+        theta = (acos(Lnodes(i)*Lpole(j) + Mnodes(i)*Mpole(j) + Nnodes(i)*Npole(j)))*deg;
+        if theta <= cone
+            zNodes(i) = zNodes(i)+1;
+        end
+    end
+end
+disp(' ')
+disp('point density done')
+
+%convert counts to percent
+zNodes = zNodes/Ndata*100;
+max_conc = max(zNodes);
+disp(' ')
+disp('density percent done')
+
+% Kalsbeek contouring
+% ------- CHECK THIS IF WE HAVE TIME --------
+% set parameters:
+% number of x and y nodes for grid
+% make these smaller if you get an error about excceding the max array size
+% nx = 50;
+nx = 90;
+ny = nx;
+% number of contours:
+ci = 5;
+e=xNodes;
+n=yNodes;
+hh=zNodes;
+%Grid the data linearly:
+estep = abs((min(e)-max(e))/nx);
+nstep = abs((min(n)-max(n))/ny);
+ee = min(e):estep:max(e);
+nn = min(n):nstep:max(n);
+[xi,yi,zi] = griddata(e,n,hh,ee,nn');
+% v = floor(min(hh)):ci:max(hh);
+v = floor(linspace(min(hh),max(hh),ci));
+disp(' ')
+disp('gridding done')
+
+% plotting
+
+%draw primitive circle with standard radius = 1
+xNodes = cos(linspace(0,2*pi,180));
+yNodes = sin(linspace(0,2*pi,180));
+plot(xNodes,yNodes,'k-')
+hold on
+axis equal
+axis off
+imagesc(ee',nn',zi)
+colormap(cmap)
+plot(xNodes,yNodes,'k-')
+plot(0,0,'k+')
+plot(1,0,'k+')
+plot(0,1,'k+')
+plot(-1,0,'k+')
+plot(0,-1,'k+')
+plot(0,0,'k+')
+
+% contour
+[c,h] = contour(xi,yi,zi,v,'-k');
+clabel(c,h);
+
+% plot polar grid
+for d = sqrt(2) * sin((10:10:80)*rad/2)
+    xNodes = d * cos(linspace(0,2*pi,180));
+    yNodes = d * sin(linspace(0,2*pi,180));
+    plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+end
+for d = (10:10:180)*rad
+    xNodes = [cos(d) -cos(d)];
+    yNodes = [sin(d) -sin(d)];
+    plot(xNodes,yNodes,'LineWidth',0.5,'Color',[.5 .5 .5])
+end
+
+end
