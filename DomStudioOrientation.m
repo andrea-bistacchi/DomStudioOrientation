@@ -41,29 +41,35 @@ commandwindow
 inDataFormat = input('>> ');
 if isempty(inDataFormat), inDataFormat = 1; end
 
-% copy formatted data to variables
+% Copy formatted data to variables. If dip/direction is input, it is
+% converted to plunge/trend to calculate poles, and viceversa. Strike
+% is calculated only for planes imported as dip/direction.
 if inDataFormat == 1
     DipDirection = inDataTable.(1);
     Dip = inDataTable.(2);
     Plunge = 90-Dip;
     Trend = (DipDirection<=180).*(DipDirection+180)+(DipDirection>180).*(DipDirection-180);
+    Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
 elseif inDataFormat == 2
     DipDirection = inDataTable.(2);
     Dip = inDataTable.(1);
     Plunge = 90-Dip;
     Trend = (DipDirection<=180).*(DipDirection+180)+(DipDirection>180).*(DipDirection-180);
+    Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
 elseif inDataFormat == 3
     Trend = inDataTable.(1);
     Plunge = inDataTable.(2);
     Dip = 90-Plunge;
     DipDirection = (Trend<=180).*(Trend+180)+(Trend>180).*(Trend-180);
+    Strike = [];
 elseif inDataFormat == 4
     Trend = inDataTable.(2);
     Plunge = inDataTable.(1);
     Dip = 90-Plunge;
     DipDirection = (Trend<=180).*(Trend+180)+(Trend>180).*(Trend-180);
+    Strike = [];
 else
-    error('aborting');
+    error('---- NO FORMAT SELECTED - aborting ----');
 end
 
 % Ndata = number of data points
@@ -72,8 +78,10 @@ disp(' ')
 disp(['Number of data loaded: ' num2str(Ndata)])
 
 % check data
-if max(Dip)>90, error('DIP ERROR'); end
-if max(DipDirection)>360, error('AZIMUTH ERROR'); end
+if max(Dip)>90 || min(Dip)<0, error('---- DIP ERROR - aborting ----'); end
+if max(DipDirection)>360 || min(DipDirection)<0, error('---- AZIMUTH ERROR - aborting ----'); end
+if max(Plunge)>90 || min(Plunge)<0, error('---- PLUNGE ERROR - aborting ----'); end
+if max(Trend)>360 || min(Trend)<0, error('---- TREND ERROR - aborting ----'); end
 
 % direction cosines of pole vectors in lower hemisphere (-sin)
 Lpole = cos(Plunge*rad).*cos(Trend*rad);
@@ -92,23 +100,27 @@ DipDirection = [DipDirection; DipDirection];
 Dip = [Dip; Dip];
 Trend = [Trend; Trend];
 Plunge = [Plunge; Plunge];
-
-% strike is used by rose diagram
-Strike = (DipDirection<90).*(DipDirection+270) + (DipDirection>=90).*(DipDirection-90);
+Strike = [Strike; Strike];
 
 % END INPUT AND CHECK DATA
 
 % STEREOPLOT & ROSE
 fig_1 = figure('WindowStyle','docked');
+
+% plot and label contours
 fig_1_1 = subplot(1,3,1);
-
-%plot and label contours
 max_conc = contour_plot(Lpole, Mpole, Npole, fig_1_1);
+title({'Equal-area contour pole plot';' '})
 
-% plot rose diagram
+% Plot rose diagram. Strike used for planes and Trend for lines.
 fig_1_2 = subplot(1,3,2);
-strike_plot = Strike(1:Ndata,:);
-rose_plot(strike_plot, fig_1_2);
+if isempty(Strike)
+    rose_plot(Trend(1:Ndata,:), fig_1_2);
+    title({'Trend rose plot';' '})
+else
+    rose_plot(Strike(1:Ndata,:), fig_1_2);
+    title({'Strike rose plot';' '})
+end
 
 % create empty subplot used to show summary text at the end
 fig_1_3 = subplot(1,3,3);
@@ -135,7 +147,6 @@ while 1
         axes(fig_1_1)
         disp(' ')
         disp('Collect class centroids with left mouse click. Any other click ends picking.')
-        button = 1;
         in_pp = [];
         in_tt=[];
         while 1,
@@ -161,14 +172,14 @@ while 1
         in_L = cos(in_pp*rad).*cos(in_tt*rad);
         in_M = cos(in_pp*rad).*sin(in_tt*rad);
         in_N = -sin(in_pp*rad);
+
         % union of unit vectors in both hemispheres -> arrays are twice the length of input data
         in_L = [in_L; -in_L];
         in_M = [in_M; -in_M];
         in_N = [in_N; -in_N];
 
-        % find data vectors closer to picked centroids
-        % this is necessary since the starting values in kmedoids must be
-        % chosen among input data
+        % Find data vectors closer to picked centroids. This is necessary since
+        % the starting values in kmedoids must be chosen among input data.
         nClass = length(in_L);
         for i = 1:nClass
             dist = sqrt((Lpole-in_L(i)).^2 + (Mpole-in_M(i)).^2 + (Npole-in_N(i)).^2);
@@ -208,16 +219,11 @@ while 1
         disp(' ')
         disp(['Class: ' num2str(i)])
 
-        % collect data for class
-        L = Lpole(idClass==i);
-        M = Mpole(idClass==i);
-        N = Npole(idClass==i);
-
         % calculate stats
         % mean unit vector
-        sumL = sum(L);
-        sumM = sum(M);
-        sumN = sum(N);
+        sumL = sum(Lpole(idClass==i));
+        sumM = sum(Mpole(idClass==i));
+        sumN = sum(Npole(idClass==i));
         R = sqrt(sumL^2+sumM^2+sumN^2);
         sumLR(i) = sumL/R;
         sumMR(i) = sumM/R;
@@ -229,9 +235,9 @@ while 1
         % Fisher K calculated with standard formulas from geology
         % textbooks, that is different with n_data >= or < 16
         % alternative formulas are:
-        % fisherK(i) = R/length(L)*(3-(R/length(L))^2)/(1-(R/length(L))^2) % Banerjee 2005
-        % fisherK(i) = 1/(1-R/length(L)) % Mardia & Jupp 2000, p. 214
-        if length(L) >= 16
+        % fisherK(i) = R/countClass(i)*(3-(R/countClass(i))^2)/(1-(R/countClass(i))^2) % Banerjee 2005
+        % fisherK(i) = 1/(1-R/countClass(i)) % Mardia & Jupp 2000, p. 214
+        if countClass(i) >= 16
             fisherK(i) = (countClass(i)-1)/(countClass(i)-R);
         else
             fisherK(i) = countClass(i)/(countClass(i)-R)*(1 - 1/countClass(i))^2;
@@ -248,7 +254,7 @@ while 1
         meanPlunge(i) = meanP;
         meanTrend(i) = meanT;
         disp(['Dip: ' num2str(meanDip(i)) '   Dir: ' num2str(meanDir(i)) '   K: ' num2str(fisherK(i))])
-        clear L M N sumL sumM sumN R meanP meanT
+        clear sumL sumM sumN R meanP meanT
     end
 
     % remove classes with mean vectors pointing upwards (but reflected poles
@@ -300,19 +306,22 @@ while 1
         % manage errors in Fisher test
         try
             % collect data for this class
-            L = Lpole(idClass==class);
-            M = Mpole(idClass==class);
-            N = Npole(idClass==class);
-            cartCords = [L';
-                         M';
-                         N'];
+            cartCords = [Lpole(idClass==class)';
+                         Mpole(idClass==class)';
+                         Npole(idClass==class)'];
 
             %plot and label contours for class
-            max_conc_class(i) = contour_plot(L, M, N, fig_2_1(i));
+            max_conc_class(i) = contour_plot(cartCords(1,:), cartCords(2,:), cartCords(3,:), fig_2_1(i));
+            title({'Equal-area contour pole plot';' '})
 
             % plot rose diagram for this class
-            strike_plot = Strike(find(ismember(idClass, class)),:);
-            rose_plot(strike_plot, fig_2_5(i));
+            if isempty(Strike)
+                rose_plot(Trend(find(ismember(idClass, class)),:), fig_2_5(i));
+                title({'Trend rose plot';' '})
+            else
+                rose_plot(Strike(find(ismember(idClass, class)),:), fig_2_5(i));
+                title({'Strike rose plot';' '})
+            end            
 
             % plot summary for this class
             axes(fig_2_8(i))
